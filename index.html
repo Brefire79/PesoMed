@@ -105,7 +105,6 @@
           <div class="row">
             <button class="btn" id="btnQuickAddWeightChecklist" type="button" data-action="quickAddWeight">+ Pesar</button>
             <button class="btn" id="btnQuickAddInjectionChecklist" type="button" data-action="quickAddInjection">+ Aplicar</button>
-            <button class="btn btn--secondary" id="btnQuickAddMeasuresChecklist" type="button" data-action="quickAddMeasures">+ Medir</button>
           </div>
         </article>
 
@@ -154,17 +153,17 @@
             <h2 class="card__title">Resumo semanal</h2>
           </div>
           <p class="muted">Texto pronto para copiar e enviar. Sem orientação médica.</p>
+          <div class="field">
+            <label class="label" for="weeklySummaryWeek">Semana</label>
+            <select id="weeklySummaryWeek" class="input" aria-label="Selecionar semana do resumo">
+              <option value="0" selected>Semana atual</option>
+              <option value="1">Semana passada</option>
+            </select>
+          </div>
           <div class="row">
-            <div class="field" style="flex: 1; min-width: 180px; margin: 0;">
-              <label class="label" for="weeklySummaryWeek">Semana</label>
-              <select id="weeklySummaryWeek" class="input" aria-label="Selecionar semana do resumo">
-                <option value="0" selected>Semana atual</option>
-                <option value="1">Semana passada</option>
-              </select>
-            </div>
             <button class="btn btn--summary" type="button" data-action="generateWeeklySummary">Gerar resumo</button>
           </div>
-          <textarea id="weeklySummaryText" class="input" rows="10" readonly placeholder="Toque em “Gerar resumo semanal”."></textarea>
+          <textarea id="weeklySummaryText" class="input" rows="10" readonly placeholder="Toque em “Gerar resumo” acima."></textarea>
           <div class="row">
             <button class="btn" type="button" data-action="copyWeeklySummary">Copiar</button>
             <button class="btn btn--secondary" type="button" data-action="shareWeeklySummary">Enviar</button>
@@ -239,21 +238,26 @@
     <section id="viewInsights" class="view" aria-labelledby="hInsights" hidden>
       <div class="view__head">
         <h1 id="hInsights" class="view__title">Insights IA</h1>
-        <div class="row">
-          <select id="insightsRange" class="input" aria-label="Período para análise">
-            <option value="30" selected>30 dias</option>
-            <option value="90">90 dias</option>
-            <option value="180">180 dias</option>
-          </select>
-          <button class="btn btn--summary" type="button" data-action="buildInsightsSummary">Montar resumo</button>
-          <button class="btn btn--secondary" type="button" data-action="runInsights">Analisar</button>
-        </div>
       </div>
 
       <div class="card">
         <p class="muted">
           A IA aqui serve para identificar padrões e hábitos. Ela <strong>não</strong> deve prescrever dose, nem dar instruções médicas.
         </p>
+        
+        <div class="field">
+          <label class="label" for="insightsRange">Período para análise</label>
+          <select id="insightsRange" class="input" aria-label="Período para análise">
+            <option value="30" selected>30 dias</option>
+            <option value="90">90 dias</option>
+            <option value="180">180 dias</option>
+          </select>
+        </div>
+        
+        <div class="row">
+          <button class="btn btn--summary" type="button" data-action="buildInsightsSummary">Montar resumo</button>
+          <button class="btn btn--secondary" type="button" data-action="runInsights">Analisar com IA</button>
+        </div>
         <details>
           <summary>O que será analisado (período selecionado)</summary>
           <ul>
@@ -268,7 +272,7 @@
         <div class="field">
           <label class="label" for="insightsSummaryText">Resumo montado</label>
           <textarea id="insightsSummaryText" class="input" rows="10" readonly placeholder="Toque em “Montar resumo”."></textarea>
-          <div class="hint">Copie para enviar ao seu médico ou toque em “Analisar” para insights automáticos.</div>
+          <div class="hint">Copie para enviar ao seu médico ou toque em “Analisar com IA” para insights automáticos.</div>
         </div>
         <div class="row">
           <button class="btn" type="button" data-action="copyInsightsSummary">Copiar</button>

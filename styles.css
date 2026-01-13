@@ -327,6 +327,15 @@ textarea.input{ resize: vertical; }
   .item__actions{ width: 100%; }
   .item__actions .btn{ flex: 1; }
   .card__head{ flex-wrap: wrap; }
+  
+  /* Botões empilhados em mobile */
+  .row{ flex-direction: column; }
+  .row .btn,
+  .row .input,
+  .row .field{ width: 100%; flex: 1; }
+  
+  /* Exceto quando há poucos botões pequenos lado a lado */
+  .row.row--inline{ flex-direction: row; }
 }
 
 .chip{ display:inline-flex; gap: 6px; align-items:center; padding: 8px 12px; border-radius: 999px; border:1px solid rgba(255,255,255,.12); background: rgba(7,17,28,.40); font-weight: 800; font-size: 12px; }
