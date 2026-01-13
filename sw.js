@@ -36,6 +36,10 @@ self.addEventListener('install', (event) => {
       const cache = await caches.open(CACHE_NAME);
       // Atualiza os arquivos do app shell dentro do mesmo cache.
       await cache.addAll(APP_SHELL);
+
+      // Deixa a atualização disponível imediatamente.
+      // O app controla a UX (banner) para evitar reload automático.
+      self.skipWaiting();
     })()
   );
 });

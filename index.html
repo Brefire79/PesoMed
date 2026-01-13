@@ -66,14 +66,14 @@
       <h1 id="hDashboard" class="view__title">Dashboard</h1>
 
       <div class="grid">
-        <article class="card" aria-label="Próxima aplicação">
+        <article class="card" id="cardNextInjection" aria-label="Próxima aplicação">
           <h2 class="card__title">Próxima aplicação</h2>
           <div class="stat">
             <div class="stat__value" id="nextInjectionValue">—</div>
             <div class="stat__sub" id="nextInjectionSub">Configure seu lembrete ou registre uma aplicação.</div>
           </div>
           <div class="row">
-            <button class="btn" type="button" data-action="quickAddInjection">Registrar aplicação</button>
+            <button class="btn" id="btnQuickAddInjectionDashboard" type="button" data-action="quickAddInjection">+ Aplicar agora</button>
           </div>
         </article>
 
@@ -89,12 +89,12 @@
             <span class="pill" id="delta30">30d: —</span>
           </div>
           <div class="row">
-            <button class="btn" type="button" data-action="quickAddWeight">Registrar peso</button>
-            <button class="btn btn--secondary" type="button" data-action="quickAddMeasures">Registrar medidas</button>
+            <button class="btn" id="btnQuickAddWeightDashboard" type="button" data-action="quickAddWeight">+ Pesar</button>
+            <button class="btn btn--secondary" id="btnQuickAddMeasuresDashboard" type="button" data-action="quickAddMeasures">+ Medir</button>
           </div>
         </article>
 
-        <article class="card" aria-label="Checklist de hoje">
+        <article class="card" id="cardChecklistToday" aria-label="Checklist de hoje">
           <div class="card__head">
             <h2 class="card__title">Checklist de hoje</h2>
             <span id="checklistTodayBadge" class="chip" aria-live="polite">—</span>
@@ -103,9 +103,9 @@
           <div id="checklistTodayAlerts" class="banner" hidden aria-live="polite"></div>
           <div id="checklistTodayList" class="list" role="list"></div>
           <div class="row">
-            <button class="btn" type="button" data-action="quickAddWeight">Registrar peso</button>
-            <button class="btn" type="button" data-action="quickAddInjection">Registrar aplicação</button>
-            <button class="btn btn--secondary" type="button" data-action="quickAddMeasures">Registrar medidas</button>
+            <button class="btn" id="btnQuickAddWeightChecklist" type="button" data-action="quickAddWeight">+ Pesar</button>
+            <button class="btn" id="btnQuickAddInjectionChecklist" type="button" data-action="quickAddInjection">+ Aplicar</button>
+            <button class="btn btn--secondary" id="btnQuickAddMeasuresChecklist" type="button" data-action="quickAddMeasures">+ Medir</button>
           </div>
         </article>
 
@@ -151,9 +151,9 @@
 
         <article class="card" aria-label="Resumo semanal">
           <div class="card__head">
-            <h2 class="card__title">Resumo semanal (WhatsApp)</h2>
+            <h2 class="card__title">Resumo semanal</h2>
           </div>
-          <p class="muted">Texto pronto para copiar/compartilhar. Sem orientação médica.</p>
+          <p class="muted">Texto pronto para copiar e enviar. Sem orientação médica.</p>
           <div class="row">
             <div class="field" style="flex: 1; min-width: 180px; margin: 0;">
               <label class="label" for="weeklySummaryWeek">Semana</label>
@@ -162,19 +162,19 @@
                 <option value="1">Semana passada</option>
               </select>
             </div>
-            <button class="btn btn--secondary" type="button" data-action="generateWeeklySummary">Gerar resumo semanal</button>
+            <button class="btn btn--summary" type="button" data-action="generateWeeklySummary">Gerar resumo</button>
           </div>
           <textarea id="weeklySummaryText" class="input" rows="10" readonly placeholder="Toque em “Gerar resumo semanal”."></textarea>
           <div class="row">
             <button class="btn" type="button" data-action="copyWeeklySummary">Copiar</button>
-            <button class="btn btn--secondary" type="button" data-action="shareWeeklySummary">Compartilhar</button>
-            <button class="btn btn--secondary" type="button" data-action="openWeeklySummaryWhatsapp">Abrir WhatsApp</button>
+            <button class="btn btn--secondary" type="button" data-action="shareWeeklySummary">Enviar</button>
+            <button class="btn btn--secondary" type="button" data-action="openWeeklySummaryWhatsapp">WhatsApp</button>
           </div>
         </article>
 
         <article class="card" aria-label="Insights automáticos">
-          <h2 class="card__title">Insights automáticos</h2>
-          <p class="muted">Regras simples locais (isso não é diagnóstico).</p>
+          <h2 class="card__title">Insights da semana</h2>
+          <p class="muted">Dicas automáticas com base nos seus registros.</p>
           <div id="localInsightsList" class="list" role="list"></div>
         </article>
 
@@ -195,7 +195,7 @@
     <section id="viewInjections" class="view" aria-labelledby="hInjections" hidden>
       <div class="view__head">
         <h1 id="hInjections" class="view__title">Aplicações</h1>
-        <button class="btn" type="button" data-action="openInjectionForm">+ Nova</button>
+        <button class="btn" id="btnOpenInjectionForm" type="button" data-action="openInjectionForm">+ Nova</button>
       </div>
 
       <div class="card">
@@ -220,7 +220,7 @@
         <article class="card" aria-label="Peso">
           <div class="card__head">
             <h2 class="card__title">Peso</h2>
-            <button class="btn" type="button" data-action="openWeightForm">+ Peso</button>
+            <button class="btn" id="btnOpenWeightForm" type="button" data-action="openWeightForm">+ Peso</button>
           </div>
           <div id="weightList" class="list" role="list"></div>
         </article>
@@ -228,7 +228,7 @@
         <article class="card" aria-label="Medidas">
           <div class="card__head">
             <h2 class="card__title">Medidas</h2>
-            <button class="btn" type="button" data-action="openMeasuresForm">+ Medidas</button>
+            <button class="btn" id="btnOpenMeasuresForm" type="button" data-action="openMeasuresForm">+ Medidas</button>
           </div>
           <div id="measuresCompare" class="compare" aria-live="polite"></div>
           <div id="measuresList" class="list" role="list"></div>
@@ -245,8 +245,8 @@
             <option value="90">90 dias</option>
             <option value="180">180 dias</option>
           </select>
-          <button class="btn btn--secondary" type="button" data-action="buildInsightsSummary">Montar resumo</button>
-          <button class="btn" type="button" data-action="runInsights">Analisar</button>
+          <button class="btn btn--summary" type="button" data-action="buildInsightsSummary">Montar resumo</button>
+          <button class="btn btn--secondary" type="button" data-action="runInsights">Analisar</button>
         </div>
       </div>
 
@@ -264,14 +264,15 @@
           </ul>
         </details>
         <div id="insightsStatus" class="status" aria-live="polite"></div>
+        <div id="insightsSummaryMeta" class="banner banner--info" hidden aria-live="polite"></div>
         <div class="field">
-          <label class="label" for="insightsSummaryText">Resumo montado (1 clique)</label>
+          <label class="label" for="insightsSummaryText">Resumo montado</label>
           <textarea id="insightsSummaryText" class="input" rows="10" readonly placeholder="Toque em “Montar resumo”."></textarea>
-          <div class="hint">Dica: use “Copiar” para mandar ao seu médico, ou “Analisar” para obter insights (mock offline).</div>
+          <div class="hint">Copie para enviar ao seu médico ou toque em “Analisar” para insights automáticos.</div>
         </div>
         <div class="row">
           <button class="btn" type="button" data-action="copyInsightsSummary">Copiar</button>
-          <button class="btn btn--secondary" type="button" data-action="shareInsightsSummary">Compartilhar</button>
+          <button class="btn btn--secondary" type="button" data-action="shareInsightsSummary">Enviar</button>
         </div>
         <div id="insightsCards" class="cards"></div>
       </div>
@@ -300,11 +301,11 @@
 
         <div class="row">
           <button class="btn" type="button" data-action="exportReportPdf">Exportar PDF</button>
-          <button class="btn btn--secondary" type="button" data-action="exportClinicalCsv">Exportar CSV clínico</button>
+          <button class="btn btn--secondary" type="button" data-action="exportClinicalCsv">Exportar CSV</button>
           <button class="btn btn--secondary" type="button" data-action="refreshReportPreview">Atualizar prévia</button>
         </div>
 
-        <p class="muted">Exportar PDF abre uma nova aba e sugere “Salvar como PDF”.</p>
+        <p class="muted">O PDF abre em nova aba. Use “Salvar como PDF” no navegador.</p>
         <div id="reportPreview" class="reportPreview" aria-live="polite"></div>
       </div>
     </section>
@@ -322,8 +323,14 @@
             <input id="settingsPatientName" class="input" type="text" placeholder="Ex.: Breno" />
           </div>
           <div class="field">
-            <label class="label" for="settingsPatientBirthYear">Ano de nascimento</label>
+            <label class="label" for="settingsPatientBirthDate">Data de nascimento</label>
+            <input id="settingsPatientBirthDate" class="input" type="date" />
+            <div class="hint">Usado para mostrar idade nos resumos/relatórios (pode deixar em branco).</div>
+          </div>
+          <div class="field">
+            <label class="label" for="settingsPatientBirthYear">Ano de nascimento (opcional)</label>
             <input id="settingsPatientBirthYear" class="input" type="number" min="1900" max="2100" step="1" inputmode="numeric" placeholder="Ex.: 1995" />
+            <div class="hint">Compatibilidade: se você preencher a data, o app usa ela como referência.</div>
           </div>
           <div class="field">
             <label class="label" for="settingsPreferredReportRange">Período padrão do relatório</label>
@@ -332,6 +339,23 @@
               <option value="90">90 dias</option>
               <option value="180">180 dias</option>
             </select>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Referência do medicamento">
+          <h2 class="card__title">Referência oficial do medicamento</h2>
+          <p class="muted">Cole aqui a bula ou rotulagem oficial para a IA usar como base.</p>
+          <div class="field">
+            <label class="label" for="settingsMedRefUrl">Link oficial (ANVISA/FDA/EMA etc.)</label>
+            <input id="settingsMedRefUrl" class="input" type="url" placeholder="https://..." />
+          </div>
+          <div class="field">
+            <label class="label" for="settingsMedOfficialText">Trecho oficial (cole aqui)</label>
+            <textarea id="settingsMedOfficialText" class="input" rows="6" placeholder="Cole aqui trechos relevantes (posologia, intervalo, contraindicações, alertas)."></textarea>
+            <div class="hint">Dica: cole só o necessário (o app pode resumir e enviar para a IA).</div>
+          </div>
+          <div class="row">
+            <button class="btn btn--secondary" type="button" data-action="openMedRefUrl">Abrir link</button>
           </div>
         </article>
 
@@ -363,7 +387,7 @@
               <label class="chip"><input type="checkbox" id="weighDow3" /> Qua</label>
               <label class="chip"><input type="checkbox" id="weighDow5" /> Sex</label>
             </div>
-            <div class="hint">Recomendado: seg/qua/sex de manhã.</div>
+            <div class="hint">Recomendado: seg/qua/sex pela manhã.</div>
           </div>
 
           <div class="field">
@@ -385,10 +409,10 @@
         </article>
 
         <article class="card" aria-label="Salvar configurações">
-          <h2 class="card__title">Salvar</h2>
-          <p class="muted">As configurações são locais (offline-first).</p>
+          <h2 class="card__title">Salvar alterações</h2>
+          <p class="muted">Tudo fica salvo localmente no seu aparelho.</p>
           <div class="row">
-            <button class="btn" type="button" data-action="saveSettings">Salvar configurações</button>
+            <button class="btn" type="button" data-action="saveSettings">Salvar</button>
           </div>
         </article>
       </div>
@@ -406,7 +430,7 @@
       <div class="dialog__body">
         <section class="card">
           <h3 class="card__title">Lembrete semanal</h3>
-          <p class="muted">Apenas um aviso visual no app (sem push).</p>
+          <p class="muted">Aviso visual no app (sem notificação push).</p>
 
           <div class="grid grid--2">
             <div class="field">
@@ -433,8 +457,8 @@
         </section>
 
         <section class="card">
-          <h3 class="card__title">Agenda fixa (Checklist & Alertas)</h3>
-          <p class="muted">Padrão: aplicação sábado 09:51 • pesagem seg/qua/sex • medidas a cada 14 dias (lembrete leve).</p>
+          <h3 class="card__title">Agenda fixa</h3>
+          <p class="muted">Configura seu checklist e alertas automáticos.</p>
 
           <div class="grid grid--2">
             <div class="field">
@@ -466,11 +490,11 @@
         </section>
 
         <section class="card">
-          <h3 class="card__title">Backup / Restore</h3>
-          <p class="muted">O backup inclui aplicações, pesos, medidas e configurações.</p>
+          <h3 class="card__title">Backup e restauração</h3>
+          <p class="muted">Baixe ou restaure todos os seus dados.</p>
           <div class="row">
-            <button class="btn btn--secondary" type="button" data-action="downloadBackup">Baixar backup (.json)</button>
-            <label class="btn btn--secondary" for="restoreFile">Restaurar</label>
+            <button class="btn btn--secondary" type="button" data-action="downloadBackup">Baixar backup</button>
+            <label class="btn btn--secondary" for="restoreFile">Restaurar backup</label>
             <input id="restoreFile" type="file" accept="application/json" hidden />
           </div>
         </section>
@@ -508,7 +532,7 @@
           </div>
           <div class="field">
             <label class="label" for="injDose">Dose (mg)</label>
-            <input id="injDose" class="input" type="number" min="0" step="0.1" inputmode="decimal" required />
+            <input id="injDose" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 2,5" required />
           </div>
         </div>
 
@@ -588,7 +612,7 @@
         <div class="grid grid--2">
           <div class="field">
             <label class="label" for="wKg">Peso (kg)</label>
-            <input id="wKg" class="input" type="number" min="0" step="0.1" inputmode="decimal" required />
+            <input id="wKg" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 82,5" required />
           </div>
           <div class="field">
             <label class="label" for="wFasting">Jejum</label>
@@ -628,16 +652,39 @@
           <input id="mDate" class="input" type="date" required />
         </div>
 
-        <div class="grid grid--2">
-          <div class="field"><label class="label" for="mWaist">Cintura (cm)</label><input id="mWaist" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
-          <div class="field"><label class="label" for="mHip">Quadril (cm)</label><input id="mHip" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
-          <div class="field"><label class="label" for="mArmL">Braço esq (cm)</label><input id="mArmL" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
-          <div class="field"><label class="label" for="mArmR">Braço dir (cm)</label><input id="mArmR" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
-          <div class="field"><label class="label" for="mThigh">Coxa (cm)</label><input id="mThigh" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
-          <div class="field"><label class="label" for="mCalf">Panturrilha (cm)</label><input id="mCalf" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
-          <div class="field"><label class="label" for="mChest">Peito (cm)</label><input id="mChest" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
-          <div class="field"><label class="label" for="mNeck">Pescoço (cm)</label><input id="mNeck" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
-        </div>
+        <fieldset class="fieldset">
+          <legend>Medidas principais</legend>
+          <div class="grid grid--2">
+            <div class="field">
+              <label class="label" for="mWaist">Cintura (altura do umbigo) • cm</label>
+              <input id="mWaist" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 95,5" />
+              <div class="hint">Referência: fita paralela ao chão, sem apertar.</div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="mHip">Quadril (referência) • cm</label>
+              <input id="mHip" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 102,0" />
+              <div class="hint">Referência: maior circunferência do bumbum, pés juntos.</div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="mNeck">Pescoço • cm</label>
+              <input id="mNeck" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 39,5" />
+              <div class="hint">Referência: fita reta, logo abaixo do pomo de Adão.</div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset" hidden>
+          <legend>Outras medidas (opcionais)</legend>
+          <div class="grid grid--2">
+            <div class="field"><label class="label" for="mArmL">Braço esq (cm)</label><input id="mArmL" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 33,5" /></div>
+            <div class="field"><label class="label" for="mArmR">Braço dir (cm)</label><input id="mArmR" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 33,0" /></div>
+            <div class="field"><label class="label" for="mThigh">Coxa (cm)</label><input id="mThigh" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 58,2" /></div>
+            <div class="field"><label class="label" for="mCalf">Panturrilha (cm)</label><input id="mCalf" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 39,0" /></div>
+            <div class="field"><label class="label" for="mChest">Peito (cm)</label><input id="mChest" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 98,0" /></div>
+          </div>
+        </fieldset>
 
         <div class="field">
           <label class="label" for="mNotes">Observação</label>

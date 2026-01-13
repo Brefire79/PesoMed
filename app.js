@@ -42,8 +42,13 @@
 
     // V3: Config do paciente / relatório
     patientName: '',
+    patientBirthDate: '',
     patientBirthYear: '',
     preferredReportRangeDays: 90,
+
+    // V4: Referência oficial do medicamento (opcional)
+    medRefUrl: '',
+    medOfficialText: '',
 
     // V2: Rodízio
     enableArmSites: false
@@ -79,6 +84,108 @@
     const n = Number(value);
     if (Number.isNaN(n)) return min;
     return Math.min(max, Math.max(min, n));
+  }
+
+  function parseNumberPtBr(value) {
+    if (typeof value === 'number') return value;
+    if (value === null || value === undefined) return Number.NaN;
+    const raw = String(value).trim();
+    if (!raw) return Number.NaN;
+
+    // Aceita 82,5 (pt-BR), 82.5 e também 1.234,56
+    let s = raw.replace(/\s+/g, '');
+    if (s.includes(',') && s.includes('.')) {
+      // provável formato pt-BR com milhar (.) e decimal (,)
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.includes(',')) {
+      s = s.replace(',', '.');
+    }
+
+    return Number(s);
+  }
+
+  function formatDecimalForInput(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const n = typeof value === 'number' ? value : parseNumberPtBr(value);
+    if (!Number.isFinite(n)) return String(value);
+    return String(n).replace('.', ',');
+  }
+
+  function isIsoDateOnly(s) {
+    return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  }
+
+  function parseIsoDateOnlyToLocalDate(dateISO) {
+    if (!isIsoDateOnly(dateISO)) return null;
+    const [y, m, d] = dateISO.split('-').map((x) => Number(x));
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+    const dt = new Date(y, m - 1, d);
+    if (dt.getFullYear() !== y || (dt.getMonth() + 1) !== m || dt.getDate() !== d) return null;
+    return dt;
+  }
+
+  function computeAgeYears(birthDateISO, refDate = new Date()) {
+    const b = parseIsoDateOnlyToLocalDate(birthDateISO);
+    if (!b) return null;
+    const y = refDate.getFullYear() - b.getFullYear();
+    const m = refDate.getMonth() - b.getMonth();
+    const d = refDate.getDate() - b.getDate();
+    const hadBirthday = (m > 0) || (m === 0 && d >= 0);
+    return hadBirthday ? y : (y - 1);
+  }
+
+  function formatDateOnlyPtBr(dateISO) {
+    const dt = parseIsoDateOnlyToLocalDate(dateISO);
+    if (!dt) return '';
+    return dt.toLocaleDateString('pt-BR', { dateStyle: 'short' });
+  }
+
+  function resolvePatientBirthInfo(settings) {
+    const birthDateISO = isIsoDateOnly(String(settings?.patientBirthDate || '').trim())
+      ? String(settings.patientBirthDate).trim()
+      : '';
+    const birthYear = String(settings?.patientBirthYear || '').trim();
+
+    if (birthDateISO) {
+      const age = computeAgeYears(birthDateISO);
+      return {
+        label: formatDateOnlyPtBr(birthDateISO) || birthDateISO,
+        ageYears: Number.isFinite(age) ? age : null,
+        approx: false
+      };
+    }
+
+    if (birthYear && /^\d{4}$/.test(birthYear)) {
+      const refY = new Date().getFullYear();
+      const age = refY - Number(birthYear);
+      return {
+        label: birthYear,
+        ageYears: Number.isFinite(age) ? age : null,
+        approx: true
+      };
+    }
+
+    return { label: '', ageYears: null, approx: false };
+  }
+
+  function buildPatientLinePtBr(settings) {
+    const name = String(settings?.patientName || '').trim();
+    if (!name) return '';
+    const birth = resolvePatientBirthInfo(settings);
+    const parts = [`Paciente: ${name}`];
+    if (birth.label) {
+      const birthParts = [`Nasc.: ${birth.label}`];
+      if (birth.ageYears !== null) birthParts.push(`Idade: ${birth.ageYears} anos${birth.approx ? ' (aprox.)' : ''}`);
+      parts.push(`(${birthParts.join(' • ')})`);
+    }
+    return parts.join(' ');
+  }
+
+  function clampText(s, maxLen) {
+    const str = String(s ?? '').trim();
+    if (!str) return '';
+    if (str.length <= maxLen) return str;
+    return `${str.slice(0, maxLen)}…`;
   }
 
   // -----------------------------
@@ -398,13 +505,29 @@
 
     const lines = [];
     lines.push(`Semana ${weekLabel}`);
+    const patientLine = buildPatientLinePtBr(settings);
+    if (patientLine) lines.push(patientLine);
     lines.push('');
+
+    // Topo: últimos registros (contexto rápido)
+    const lastInjAny = [...cache.injections].sort(sortByDateTimeDesc)[0] || null;
+    const lastWAny = [...cache.weights].sort(sortByDateTimeDesc)[0] || null;
+    if (lastInjAny) {
+      lines.push(`Última aplicação (geral): ${formatDateTimePtBr(lastInjAny.dateTimeISO)} • ${lastInjAny.medName} • ${formatDoseMg(lastInjAny.doseMg)} • ${siteLabel(lastInjAny.site)}`);
+    }
+    if (lastWAny) {
+      lines.push(`Último peso (geral): ${formatDateTimePtBr(lastWAny.dateTimeISO)} • ${formatKg(lastWAny.weightKg)} (${lastWAny.fasting ? 'jejum' : 'sem jejum'})`);
+    }
+    lines.push('');
+
+    lines.push('Resumo da semana');
     if (weightStart !== null && weightEnd !== null) {
       const sign = weightDelta > 0 ? '+' : '';
       lines.push(`Peso: ${formatMaybeKg(weightStart)} → ${formatMaybeKg(weightEnd)} (${sign}${formatMaybeKg(weightDelta).replace(' kg', '')} kg)`);
       if (bestW !== null && worstW !== null) {
         lines.push(`Melhor pesagem: ${formatMaybeKg(bestW)} • Pior pesagem: ${formatMaybeKg(worstW)}`);
       }
+      lines.push(`Pesagens na semana: ${weightsAsc.length}`);
     } else {
       lines.push('Peso: sem dados suficientes na semana');
     }
@@ -823,7 +946,7 @@
       id: input.id || uuid(),
       dateTimeISO: input.dateTimeISO,
       medName: String(input.medName || 'Retatrutida').trim() || 'Retatrutida',
-      doseMg: Number(input.doseMg),
+      doseMg: parseNumberPtBr(input.doseMg),
       site: String(input.site || 'abdomen_right'),
       symptoms: {
         nausea: clampNumber(input.symptoms?.nausea ?? 0, 0, 10),
@@ -840,7 +963,7 @@
     return {
       id: input.id || uuid(),
       dateTimeISO: input.dateTimeISO,
-      weightKg: Number(input.weightKg),
+      weightKg: parseNumberPtBr(input.weightKg),
       fasting: Boolean(input.fasting),
       notes: String(input.notes || '').trim()
     };
@@ -850,7 +973,7 @@
     // Alguns campos podem ficar vazios; manter null é melhor do que NaN.
     const nOrNull = (v) => {
       if (v === '' || v === null || v === undefined) return null;
-      const n = Number(v);
+      const n = parseNumberPtBr(v);
       return Number.isFinite(n) ? n : null;
     };
 
@@ -905,10 +1028,21 @@
       measureReminderEveryDays: Math.max(7, Math.floor(Number(merged.measureReminderEveryDays || DEFAULTS.measureReminderEveryDays))),
 
       patientName: String(merged.patientName || '').trim(),
-      patientBirthYear: String(merged.patientBirthYear || '').trim(),
+      patientBirthDate: isIsoDateOnly(String(merged.patientBirthDate || '').trim())
+        ? String(merged.patientBirthDate || '').trim()
+        : '',
+      patientBirthYear: (() => {
+        const by = String(merged.patientBirthYear || '').trim();
+        const bd = String(merged.patientBirthDate || '').trim();
+        if (isIsoDateOnly(bd)) return bd.slice(0, 4);
+        return by;
+      })(),
       preferredReportRangeDays: [30, 90, 180].includes(Number(merged.preferredReportRangeDays))
         ? Number(merged.preferredReportRangeDays)
         : DEFAULTS.preferredReportRangeDays,
+
+      medRefUrl: String(merged.medRefUrl || '').trim(),
+      medOfficialText: String(merged.medOfficialText || '').trim(),
 
       enableArmSites: Boolean(merged.enableArmSites)
     };
@@ -1098,6 +1232,155 @@
   }
 
   // -----------------------------
+  // Destaque de pendências (notificações) - círculo amarelo
+  // -----------------------------
+
+  const ATTENTION_STORAGE_KEY = 'dosecheck_attention_v1';
+  const attentionState = { els: [] };
+
+  const ATTENTION_MAP = {
+    weight: {
+      selectorsByRoute: {
+        dashboard: '#btnQuickAddWeightChecklist',
+        body: '#btnOpenWeightForm'
+      },
+      tabRoute: 'body'
+    },
+    injection: {
+      selectorsByRoute: {
+        dashboard: '#btnQuickAddInjectionChecklist',
+        injections: '#btnOpenInjectionForm'
+      },
+      tabRoute: 'injections'
+    },
+    measures: {
+      selectorsByRoute: {
+        dashboard: '#btnQuickAddMeasuresChecklist',
+        body: '#btnOpenMeasuresForm'
+      },
+      tabRoute: 'body'
+    },
+    reminder: {
+      selectorsByRoute: {
+        dashboard: '#cardNextInjection'
+      },
+      tabRoute: 'dashboard'
+    }
+  };
+
+  function readAttention() {
+    try {
+      const raw = localStorage.getItem(ATTENTION_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (!parsed.kind || typeof parsed.kind !== 'string') return null;
+      if (!ATTENTION_MAP[parsed.kind]) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeAttention(att) {
+    try {
+      localStorage.setItem(ATTENTION_STORAGE_KEY, JSON.stringify(att));
+    } catch {
+      // ignore
+    }
+  }
+
+  function clearAttentionVisuals() {
+    for (const el of attentionState.els) {
+      try {
+        el.classList.remove('attention-ring');
+      } catch {
+        // ignore
+      }
+    }
+    attentionState.els = [];
+  }
+
+  function clearAttention(kind = null) {
+    const current = readAttention();
+    if (kind && current?.kind && current.kind !== kind) return;
+    try {
+      localStorage.removeItem(ATTENTION_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    clearAttentionVisuals();
+  }
+
+  function setAttention(kind, reason = '') {
+    if (!ATTENTION_MAP[kind]) return;
+    const current = readAttention();
+    if (current?.kind) return; // não sobrescreve destaque já ativo
+    writeAttention({ kind, reason: String(reason || ''), ts: Date.now() });
+  }
+
+  function addAttentionRing(el) {
+    if (!el) return;
+    el.classList.add('attention-ring');
+    attentionState.els.push(el);
+
+    const handler = () => clearAttention();
+    el.addEventListener('pointerdown', handler, { once: true });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') handler();
+    }, { once: true });
+
+    try {
+      const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    } catch {
+      // ignore
+    }
+  }
+
+  function applyAttention() {
+    const att = readAttention();
+    clearAttentionVisuals();
+    if (!att) return;
+
+    const route = getRoute();
+    const map = ATTENTION_MAP[att.kind];
+    if (!map) return;
+
+    const selector = map.selectorsByRoute?.[route];
+    if (selector) {
+      const el = document.querySelector(selector);
+      if (el instanceof HTMLElement) {
+        addAttentionRing(el);
+        return;
+      }
+    }
+
+    const tabEl = map.tabRoute ? tabs[map.tabRoute] : null;
+    if (tabEl instanceof HTMLElement) addAttentionRing(tabEl);
+  }
+
+  function readAttentionKindFromHash() {
+    const h = String(location.hash || '');
+    const qIndex = h.indexOf('?');
+    if (qIndex < 0) return null;
+    const params = new URLSearchParams(h.slice(qIndex + 1));
+    const kind = params.get('attention');
+    if (!kind) return null;
+    if (!ATTENTION_MAP[kind]) return null;
+
+    params.delete('attention');
+    const newHash = h.slice(0, qIndex) + (params.toString() ? `?${params.toString()}` : '');
+    try {
+      history.replaceState(null, '', `${location.pathname}${location.search}${newHash}`);
+    } catch {
+      // ignore
+    }
+
+    return kind;
+  }
+
+  // -----------------------------
   // Elementos UI
   // -----------------------------
 
@@ -1128,6 +1411,7 @@
   const insightsStatus = document.getElementById('insightsStatus');
   const insightsCards = document.getElementById('insightsCards');
   const insightsSummaryTextEl = document.getElementById('insightsSummaryText');
+  const insightsSummaryMetaEl = document.getElementById('insightsSummaryMeta');
   const insightsRangeEl = document.getElementById('insightsRange');
 
   const menuDialog = document.getElementById('menuDialog');
@@ -1161,8 +1445,11 @@
   const reportPreviewEl = document.getElementById('reportPreview');
 
   const settingsPatientNameEl = document.getElementById('settingsPatientName');
+  const settingsPatientBirthDateEl = document.getElementById('settingsPatientBirthDate');
   const settingsPatientBirthYearEl = document.getElementById('settingsPatientBirthYear');
   const settingsPreferredReportRangeEl = document.getElementById('settingsPreferredReportRange');
+  const settingsMedRefUrlEl = document.getElementById('settingsMedRefUrl');
+  const settingsMedOfficialTextEl = document.getElementById('settingsMedOfficialText');
   const settingsInjectionDowEl = document.getElementById('settingsInjectionDow');
   const settingsInjectionTimeEl = document.getElementById('settingsInjectionTime');
   const settingsMeasureEveryEl = document.getElementById('settingsMeasureEvery');
@@ -1334,6 +1621,102 @@
   function whatsappShareUrl(text) {
     const msg = String(text || '');
     return `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  }
+
+  function pad2(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function formatIcsLocalDateTime(d) {
+    // Formato "floating" local (sem Z) para abrir no calendário do dispositivo.
+    return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}T${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+  }
+
+  function downloadTextFile(filename, mime, text) {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+
+  async function computeNextInjectionDateTime() {
+    const settings = await getSettings();
+    const injections = await getAll(STORE_INJECTIONS);
+    injections.sort(sortByDateTimeDesc);
+
+    if (injections.length > 0) {
+      const last = injections[0];
+      const lastDt = new Date(last.dateTimeISO);
+      const next = addDays(lastDt, 7);
+      return { next, basis: 'last', medName: last.medName, doseMg: last.doseMg };
+    }
+
+    const reminder = computeNextReminderDate(settings);
+    if (reminder) {
+      return { next: reminder, basis: 'reminder', medName: 'Aplicação', doseMg: null };
+    }
+
+    // Fallback: agenda fixa (inj day + time) se existir
+    try {
+      const scheduled = computeNextScheduledDateTime(settings, now());
+      if (scheduled) return { next: scheduled, basis: 'schedule', medName: 'Aplicação', doseMg: null };
+    } catch {
+      // ignore
+    }
+
+    return null;
+  }
+
+  async function exportNextInjectionToCalendar() {
+    const info = await computeNextInjectionDateTime();
+    if (!info?.next) {
+      showToast('Sem próxima aplicação para exportar.');
+      return;
+    }
+
+    const start = info.next;
+    const end = new Date(start.getTime() + 15 * 60 * 1000);
+    const uid = `${Date.now()}-${Math.random().toString(16).slice(2)}@dosecheck`;
+
+    const summaryParts = [];
+    if (info.medName) summaryParts.push(String(info.medName));
+    if (Number.isFinite(info.doseMg)) summaryParts.push(`${formatDoseMg(info.doseMg)}`);
+    const summary = summaryParts.length ? `Aplicação: ${summaryParts.join(' • ')}` : 'Aplicação de medicamento';
+
+    const description = [
+      'DoseCheck (PWA)',
+      `Gerado em: ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`,
+      `Base: ${info.basis}`
+    ].join('\\n');
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//DoseCheck//PT-BR//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${formatIcsLocalDateTime(new Date())}`,
+      `DTSTART:${formatIcsLocalDateTime(start)}`,
+      `DTEND:${formatIcsLocalDateTime(end)}`,
+      `SUMMARY:${summary.replace(/\r?\n/g, ' ')}`,
+      `DESCRIPTION:${description.replace(/\r?\n/g, '\\n')}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+      ''
+    ].join('\r\n');
+
+    const y = start.getFullYear();
+    const m = pad2(start.getMonth() + 1);
+    const d = pad2(start.getDate());
+    downloadTextFile(`dosecheck-aplicacao-${y}${m}${d}.ics`, 'text/calendar;charset=utf-8', ics);
+    showToast('Arquivo do Calendário gerado.');
   }
 
   async function shareText(titleOrObj, textMaybe) {
@@ -1648,6 +2031,24 @@
       }
     }
 
+    // Notificação visual persistente (até o usuário abrir o local correto)
+    // Prioridade: atrasos obrigatórios > avisos de hoje > medidas sugeridas.
+    if (!readAttention()) {
+      const lateReq = overdueItems.find((x) => x.required && !x.done);
+      if (lateReq?.kind === 'injection') setAttention('injection', 'Aplicação atrasada');
+      else if (lateReq?.kind === 'weight') setAttention('weight', 'Pesagem atrasada');
+      else {
+        const warnInj = todayItems.find((x) => x.kind === 'injection' && x.warnAfterCutoff);
+        const warnW = todayItems.find((x) => x.kind === 'weight' && x.warnAfterCutoff);
+        if (warnInj) setAttention('injection', 'Aplicação pendente hoje');
+        else if (warnW) setAttention('weight', 'Pesagem pendente hoje');
+        else {
+          const measuresDue = todayItems.find((x) => x.kind === 'measures' && !x.done);
+          if (measuresDue) setAttention('measures', 'Medidas sugeridas');
+        }
+      }
+    }
+
     // Próximos 7 dias
     const upcoming = await buildUpcomingChecklist(7);
     clearChildren(checklistUpcomingList);
@@ -1816,8 +2217,12 @@
     const s = await getSettings();
 
     if (settingsPatientNameEl) settingsPatientNameEl.value = String(s.patientName || '');
+    if (settingsPatientBirthDateEl) settingsPatientBirthDateEl.value = String(s.patientBirthDate || '');
     if (settingsPatientBirthYearEl) settingsPatientBirthYearEl.value = String(s.patientBirthYear || '');
     if (settingsPreferredReportRangeEl) settingsPreferredReportRangeEl.value = String(s.preferredReportRangeDays || DEFAULTS.preferredReportRangeDays);
+
+    if (settingsMedRefUrlEl) settingsMedRefUrlEl.value = String(s.medRefUrl || '');
+    if (settingsMedOfficialTextEl) settingsMedOfficialTextEl.value = String(s.medOfficialText || '');
 
     if (settingsInjectionDowEl) settingsInjectionDowEl.value = String(s.injectionDayOfWeek ?? DEFAULTS.injectionDayOfWeek);
     if (settingsInjectionTimeEl) settingsInjectionTimeEl.value = String(s.injectionTime || DEFAULTS.injectionTime);
@@ -1836,10 +2241,19 @@
     if (weighDow3El?.checked) weigh.push(3);
     if (weighDow5El?.checked) weigh.push(5);
 
+    const patientBirthDate = String(settingsPatientBirthDateEl?.value || '').trim();
+    const patientBirthYearRaw = String(settingsPatientBirthYearEl?.value || '').trim();
+    const patientBirthYear = (patientBirthDate && isIsoDateOnly(patientBirthDate)) ? patientBirthDate.slice(0, 4) : patientBirthYearRaw;
+
     return {
       patientName: settingsPatientNameEl?.value || '',
-      patientBirthYear: settingsPatientBirthYearEl?.value || '',
+      patientBirthDate: isIsoDateOnly(patientBirthDate) ? patientBirthDate : '',
+      patientBirthYear,
       preferredReportRangeDays: settingsPreferredReportRangeEl?.value ? Number(settingsPreferredReportRangeEl.value) : undefined,
+
+      medRefUrl: settingsMedRefUrlEl?.value || '',
+      medOfficialText: settingsMedOfficialTextEl?.value || '',
+
       injectionDayOfWeek: settingsInjectionDowEl?.value ? Number(settingsInjectionDowEl.value) : undefined,
       injectionTime: settingsInjectionTimeEl?.value || undefined,
       weighDaysOfWeek: weigh,
@@ -2021,7 +2435,7 @@
     return notes.slice(0, maxItems);
   }
 
-  function buildClinicalReportInnerHtml({ rangeDays, patientName, patientBirthYear, data, settings = null }) {
+  function buildClinicalReportInnerHtml({ rangeDays, patientName, patientBirthLabel, patientAgeYears, data, settings = null }) {
     const s = buildSummaryForDays(rangeDays, data);
     const generatedAt = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -2129,7 +2543,10 @@
           </div>
           <div class="cr-patient">
             <div><strong>Paciente:</strong> ${escapeHtml(patientName || '—')}</div>
-            <div class="cr-muted">${patientBirthYear ? `Nasc.: ${escapeHtml(patientBirthYear)}` : '—'}</div>
+            <div class="cr-muted">
+              ${patientBirthLabel ? `Nasc.: ${escapeHtml(patientBirthLabel)}` : '—'}
+              ${Number.isFinite(patientAgeYears) ? ` • Idade: ${escapeHtml(String(patientAgeYears))} anos` : ''}
+            </div>
           </div>
         </header>
 
@@ -2268,7 +2685,9 @@
     const settings = await getSettings();
     const rangeDays = reportRangeEl?.value ? Number(reportRangeEl.value) : (settings.preferredReportRangeDays || DEFAULTS.preferredReportRangeDays);
     const patientName = reportPatientNameEl?.value || settings.patientName || '';
-    const patientBirthYear = settings.patientBirthYear || '';
+    const birth = resolvePatientBirthInfo(settings);
+    const patientBirthLabel = birth.label || '';
+    const patientAgeYears = birth.ageYears;
 
     const [injections, weights, measures] = await Promise.all([
       getAll(STORE_INJECTIONS),
@@ -2279,7 +2698,8 @@
     reportPreviewEl.innerHTML = buildClinicalReportInnerHtml({
       rangeDays,
       patientName,
-      patientBirthYear,
+      patientBirthLabel,
+      patientAgeYears,
       data: { injections, weights, measures },
       settings
     });
@@ -2289,7 +2709,9 @@
     const settings = await getSettings();
     const rangeDays = reportRangeEl?.value ? Number(reportRangeEl.value) : (settings.preferredReportRangeDays || DEFAULTS.preferredReportRangeDays);
     const patientName = reportPatientNameEl?.value || settings.patientName || '';
-    const patientBirthYear = settings.patientBirthYear || '';
+    const birth = resolvePatientBirthInfo(settings);
+    const patientBirthLabel = birth.label || '';
+    const patientAgeYears = birth.ageYears;
 
     const [injections, weights, measures] = await Promise.all([
       getAll(STORE_INJECTIONS),
@@ -2300,7 +2722,8 @@
     const inner = buildClinicalReportInnerHtml({
       rangeDays,
       patientName,
-      patientBirthYear,
+      patientBirthLabel,
+      patientAgeYears,
       data: { injections, weights, measures },
       settings
     });
@@ -2373,9 +2796,42 @@
 
     const lines = [];
     lines.push(`Resumo (últimos ${d} dias) — DoseCheck`);
-    if (settings?.patientName) {
-      lines.push(`Paciente: ${settings.patientName}${settings.patientBirthYear ? ` (nasc. ${settings.patientBirthYear})` : ''}`);
+    const patientLine = buildPatientLinePtBr(settings);
+    if (patientLine) lines.push(patientLine);
+
+    const med = String(summary?.medicationName || '').trim();
+    if (med) lines.push(`Medicação (mais registrada): ${med}`);
+
+    const hasOfficial = Boolean(String(settings?.medRefUrl || '').trim() || String(settings?.medOfficialText || '').trim());
+    lines.push(`Referência oficial: ${hasOfficial ? 'fornecida pelo usuário' : 'não informada'}`);
+    lines.push('');
+
+    if (summary?.last?.injection) {
+      const li = summary.last.injection;
+      const dt = li.dateTimeISO ? formatDateTimePtBr(li.dateTimeISO) : '—';
+      const dose = Number.isFinite(Number(li.doseMg)) ? formatDoseMg(li.doseMg) : '—';
+      const site = li.site ? siteLabel(li.site) : '—';
+      const mn = String(li.medName || '').trim();
+      lines.push(`Última aplicação: ${dt} • ${mn || '—'} • ${dose} • ${site}`);
     }
+
+    if (summary?.last?.weight) {
+      const lw = summary.last.weight;
+      const dt = lw.dateTimeISO ? formatDateTimePtBr(lw.dateTimeISO) : '—';
+      const w = Number.isFinite(Number(lw.weightKg)) ? formatKg(lw.weightKg) : '—';
+      lines.push(`Último peso: ${dt} • ${w} (${lw.fasting ? 'jejum' : 'sem jejum'})`);
+    }
+
+    if (summary?.last?.measures) {
+      const lm = summary.last.measures;
+      const d0 = lm.dateISO ? formatDatePtBr(lm.dateISO) : '—';
+      const parts = [];
+      if (lm.waistCm !== null && lm.waistCm !== undefined) parts.push(`Cintura ${formatCm(lm.waistCm)}`);
+      if (lm.hipCm !== null && lm.hipCm !== undefined) parts.push(`Quadril ${formatCm(lm.hipCm)}`);
+      if (lm.neckCm !== null && lm.neckCm !== undefined) parts.push(`Pescoço ${formatCm(lm.neckCm)}`);
+      if (parts.length) lines.push(`Últimas medidas: ${d0} • ${parts.join(' • ')}`);
+    }
+
     lines.push('');
     lines.push(`Aplicações: ${summary.injections.count}`);
     lines.push(`Regularidade (6–8 dias): ${summary.injections.onTimeRate === null ? '—' : `${Math.round(summary.injections.onTimeRate * 100)}%`}`);
@@ -2407,6 +2863,159 @@
     return lines.join('\n');
   }
 
+  function buildInsightsSummaryHtmlFromSummary(summary, settings) {
+    const d = Math.max(1, Math.floor(Number(summary?.periodDays) || 30));
+    const birth = resolvePatientBirthInfo(settings);
+
+    const medName = String(summary?.medicationName || '').trim();
+    const hasOfficial = Boolean(String(settings?.medRefUrl || '').trim() || String(settings?.medOfficialText || '').trim());
+
+    const pct = summary.injections.onTimeRate === null ? '—' : `${Math.round(summary.injections.onTimeRate * 100)}%`;
+    const meanDays = summary.injections.meanDaysBetween ? summary.injections.meanDaysBetween.toFixed(1).replace('.', ',') : '—';
+
+    const wStart = summary.weight.startKg === null ? '—' : summary.weight.startKg.toFixed(1).replace('.', ',');
+    const wEnd = summary.weight.endKg === null ? '—' : summary.weight.endKg.toFixed(1).replace('.', ',');
+    const wDelta = Number.isFinite(summary.weight.deltaKg)
+      ? `${summary.weight.deltaKg >= 0 ? '+' : ''}${summary.weight.deltaKg.toFixed(1).replace('.', ',')} kg`
+      : '—';
+    const wTrend = Number.isFinite(summary.weight.perWeekKg)
+      ? `${summary.weight.perWeekKg >= 0 ? '+' : ''}${summary.weight.perWeekKg.toFixed(2).replace('.', ',')} kg/sem`
+      : '—';
+
+    const measuresDelta = summary.measures.deltaByField
+      ? Object.entries(summary.measures.deltaByField)
+        .map(([k, v]) => `${k} ${v >= 0 ? '+' : ''}${v.toFixed(1).replace('.', ',')} cm`)
+        .join(' • ')
+      : '';
+
+    const sx = summary.symptoms.averages
+      ? Object.keys(summary.symptoms.averages)
+        .map((k) => `${SYMPTOMS_LABELS[k]} ${(summary.symptoms.averages[k] ?? 0).toFixed(1).replace('.', ',')}`)
+        .join(' • ')
+      : '';
+
+    const title = `Resumo DoseCheck — últimos ${d} dias`;
+
+    const lastHtml = (() => {
+      const li = summary?.last?.injection;
+      const lw = summary?.last?.weight;
+      const lm = summary?.last?.measures;
+      const parts = [];
+      if (li) {
+        parts.push(`Última aplicação: ${escapeHtml(formatDateTimePtBr(li.dateTimeISO))} • ${escapeHtml(String(li.medName || '—'))} • ${escapeHtml(formatDoseMg(li.doseMg))} • ${escapeHtml(siteLabel(li.site))}`);
+      }
+      if (lw) {
+        parts.push(`Último peso: ${escapeHtml(formatDateTimePtBr(lw.dateTimeISO))} • ${escapeHtml(formatKg(lw.weightKg))} (${lw.fasting ? 'jejum' : 'sem jejum'})`);
+      }
+      if (lm) {
+        const mParts = [];
+        if (lm.waistCm !== null && lm.waistCm !== undefined) mParts.push(`Cintura ${escapeHtml(formatCm(lm.waistCm))}`);
+        if (lm.hipCm !== null && lm.hipCm !== undefined) mParts.push(`Quadril ${escapeHtml(formatCm(lm.hipCm))}`);
+        if (lm.neckCm !== null && lm.neckCm !== undefined) mParts.push(`Pescoço ${escapeHtml(formatCm(lm.neckCm))}`);
+        if (mParts.length) parts.push(`Últimas medidas: ${escapeHtml(formatDatePtBr(lm.dateISO))} • ${mParts.join(' • ')}`);
+      }
+      if (!parts.length) return '';
+      return `<div style="margin-top:10px; border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px; background:#ffffff; color:#0f172a; font-size:12px; line-height:1.35;">${parts.join('<br/>')}</div>`;
+    })();
+
+    const name = String(settings?.patientName || '').trim();
+    const patientHtml = name
+      ? `
+        <div style="border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px; background:#ffffff;">
+          <div style="font-weight:900; color:#0f172a; font-size:14px;">${escapeHtml(name)}</div>
+          <div style="margin-top:4px; color:#334155; font-size:12px;">
+            ${birth.label ? `<span style=\"font-weight:800; color:#64748b;\">Nascimento:</span> <span style=\"font-weight:900; color:#0f172a;\">${escapeHtml(birth.label)}</span>` : ''}
+            ${Number.isFinite(birth.ageYears) ? ` <span style=\"font-weight:900; color:#16a34a;\">(${escapeHtml(String(birth.ageYears))} anos${birth.approx ? ' aprox.' : ''})</span>` : ''}
+          </div>
+        </div>
+      `.trim()
+      : '';
+
+    const section = (label, color, bodyHtml) => `
+      <div style="margin-top:10px; border-left:6px solid ${color}; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px;">
+        <div style="font-weight:1000; color:#0f172a; text-transform:uppercase; letter-spacing:.03em; font-size:12px;">${escapeHtml(label)}</div>
+        <div style="margin-top:6px; color:#0f172a; font-size:13px; line-height:1.35;">${bodyHtml}</div>
+      </div>
+    `.trim();
+
+    const appsHtml = `
+      <div><span style="color:#64748b; font-weight:900;">Aplicações:</span> <span style="font-weight:1000;">${escapeHtml(String(summary.injections.count))}</span></div>
+      <div><span style="color:#64748b; font-weight:900;">Regularidade (6–8 dias):</span> <span style="font-weight:1000;">${escapeHtml(pct)}</span></div>
+      <div><span style="color:#64748b; font-weight:900;">Média entre aplicações:</span> <span style="font-weight:1000;">${escapeHtml(meanDays)} dia(s)</span></div>
+    `.trim();
+
+    const weightHtml = `
+      <div><span style="color:#64748b; font-weight:900;">Registros:</span> <span style="font-weight:1000;">${escapeHtml(String(summary.weight.count))}</span></div>
+      <div><span style="color:#64748b; font-weight:900;">Início → fim:</span> <span style="font-weight:1000;">${escapeHtml(wStart)} → ${escapeHtml(wEnd)} kg</span></div>
+      <div><span style="color:#64748b; font-weight:900;">Delta:</span> <span style="font-weight:1000;">${escapeHtml(wDelta)}</span></div>
+      <div><span style="color:#64748b; font-weight:900;">Tendência:</span> <span style="font-weight:1000;">${escapeHtml(wTrend)}</span></div>
+    `.trim();
+
+    const measuresHtml = `
+      <div><span style="color:#64748b; font-weight:900;">Registros:</span> <span style="font-weight:1000;">${escapeHtml(String(summary.measures.count))}</span></div>
+      <div><span style="color:#64748b; font-weight:900;">Delta (início → fim):</span> <span style="font-weight:1000;">${escapeHtml(measuresDelta || '—')}</span></div>
+    `.trim();
+
+    const symptomsHtml = `
+      <div><span style="color:#64748b; font-weight:900;">Sintomas médios (0–10):</span></div>
+      <div style="margin-top:4px;">${escapeHtml(sx || '—')}</div>
+    `.trim();
+
+    return `
+      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; border:2px solid #0ea5e9; border-radius:16px; padding:14px; background:#f8fafc;">
+        <div style="font-weight:1000; color:#0f172a; font-size:16px;">${escapeHtml(title)}</div>
+        <div style="margin-top:6px; color:#475569; font-size:12px;">Gerado pelo DoseCheck. Sem orientação médica; apenas organização de dados.</div>
+        <div style="margin-top:6px; color:#0f172a; font-size:12px;">
+          ${medName ? `<span style=\"font-weight:900; color:#64748b;\">Medicação:</span> <span style=\"font-weight:1000;\">${escapeHtml(medName)}</span>` : ''}
+          ${medName ? ' • ' : ''}
+          <span style="font-weight:900; color:#64748b;">Referência oficial:</span>
+          <span style="font-weight:1000; color:${hasOfficial ? '#16a34a' : '#b45309'};">${hasOfficial ? 'fornecida' : 'não informada'}</span>
+        </div>
+        ${patientHtml ? `<div style=\"margin-top:10px;\">${patientHtml}</div>` : ''}
+        ${lastHtml ? `<div style=\"margin-top:10px;\">${lastHtml}</div>` : ''}
+        ${section('Aplicações', '#2563eb', appsHtml)}
+        ${section('Peso', '#7c3aed', weightHtml)}
+        ${section('Medidas', '#0f766e', measuresHtml)}
+        ${section('Sintomas', '#f59e0b', symptomsHtml)}
+      </div>
+    `.trim();
+  }
+
+  async function copyRichToClipboard({ html, text }) {
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        const item = new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' })
+        });
+        await navigator.clipboard.write([item]);
+        showToast('Copiado (formatado).');
+        return true;
+      }
+    } catch {
+      // fallback abaixo
+    }
+
+    await copyTextToClipboard(text);
+    return false;
+  }
+
+  async function shareHtmlFileIfPossible({ title, filename, html, textFallback }) {
+    try {
+      const file = new File([html], filename, { type: 'text/html' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title, files: [file] });
+        return true;
+      }
+    } catch {
+      // fallback abaixo
+    }
+
+    await shareText({ title, text: textFallback });
+    showToast('Compartilhado como texto (o app de destino pode não suportar formatação).');
+    return false;
+  }
+
   // Requisito: função buildInsightsSummary(days=30)
   async function buildInsightsSummary(days = 30) {
     const settings = await getSettings();
@@ -2418,7 +3027,7 @@
     ]);
 
     const summary = buildLastNDaysSummary(d, { injections, weights, measures });
-    const prompt = createAiPrompt(summary);
+    const prompt = createAiPrompt(summary, settings);
     const text = formatInsightsSummaryTextFromSummary(summary, settings);
     return { days: d, settings, summary, prompt, text };
   }
@@ -2426,6 +3035,71 @@
   async function buildInsightsSummaryText(days = 30) {
     const built = await buildInsightsSummary(days);
     return built.text;
+  }
+
+  function renderInsightsSummaryMeta(built) {
+    if (!insightsSummaryMetaEl) return;
+
+    const d = Math.max(1, Math.floor(Number(built?.days) || 30));
+    const summary = built?.summary || {};
+    const settings = built?.settings || {};
+
+    const medName = String(summary?.medicationName || '').trim();
+    const refUrl = String(settings?.medRefUrl || '').trim();
+    const hasOfficialText = Boolean(String(settings?.medOfficialText || '').trim());
+    const hasOfficial = Boolean(refUrl || hasOfficialText);
+
+    const patientLine = buildPatientLinePtBr(settings);
+    const li = summary?.last?.injection;
+    const lw = summary?.last?.weight;
+    const lm = summary?.last?.measures;
+
+    const hasLast = Boolean(li || lw || lm);
+    const hasAny = Boolean(patientLine || medName || hasOfficial || hasLast);
+
+    if (!hasAny) {
+      insightsSummaryMetaEl.hidden = true;
+      insightsSummaryMetaEl.innerHTML = '';
+      return;
+    }
+
+    const lines = [];
+    lines.push(`<div style="font-weight:900;">Resumo pronto (${d} dias)</div>`);
+    if (patientLine) lines.push(`<div>${escapeHtml(patientLine)}</div>`);
+
+    if (medName) {
+      lines.push(`<div><strong>Medicação:</strong> ${escapeHtml(medName)}</div>`);
+    }
+
+    const refLabel = hasOfficial ? 'fornecida' : 'não informada';
+    const refColor = hasOfficial ? '#16a34a' : '#b45309';
+    let refExtra = '';
+    if (refUrl) {
+      refExtra = ` — <a href="${escapeHtml(refUrl)}" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline;">abrir link</a>`;
+    } else if (hasOfficialText) {
+      refExtra = ' — trecho colado nas configurações';
+    }
+    lines.push(`<div><strong>Referência oficial:</strong> <span style="font-weight:900; color:${refColor};">${refLabel}</span>${refExtra}</div>`);
+
+    if (hasLast) {
+      lines.push('<div style="margin-top:8px; font-weight:900;">Últimos registros</div>');
+      if (li) {
+        lines.push(`<div>• Aplicação: ${escapeHtml(formatDateTimePtBr(li.dateTimeISO))} • ${escapeHtml(String(li.medName || '—'))} • ${escapeHtml(formatDoseMg(li.doseMg))} • ${escapeHtml(siteLabel(li.site))}</div>`);
+      }
+      if (lw) {
+        lines.push(`<div>• Peso: ${escapeHtml(formatDateTimePtBr(lw.dateTimeISO))} • ${escapeHtml(formatKg(lw.weightKg))} (${lw.fasting ? 'jejum' : 'sem jejum'})</div>`);
+      }
+      if (lm) {
+        const mParts = [];
+        if (lm.waistCm !== null && lm.waistCm !== undefined) mParts.push(`Cintura ${escapeHtml(formatCm(lm.waistCm))}`);
+        if (lm.hipCm !== null && lm.hipCm !== undefined) mParts.push(`Quadril ${escapeHtml(formatCm(lm.hipCm))}`);
+        if (lm.neckCm !== null && lm.neckCm !== undefined) mParts.push(`Pescoço ${escapeHtml(formatCm(lm.neckCm))}`);
+        if (mParts.length) lines.push(`<div>• Medidas: ${escapeHtml(formatDatePtBr(lm.dateISO))} • ${mParts.join(' • ')}</div>`);
+      }
+    }
+
+    insightsSummaryMetaEl.innerHTML = lines.join('');
+    insightsSummaryMetaEl.hidden = false;
   }
 
   // -----------------------------
@@ -2539,14 +3213,9 @@
       parts.push(`${label} ${Number(v).toFixed(1).replace('.', ',')}`);
     };
 
-    add('Cintura', m.waistCm);
-    add('Quadril', m.hipCm);
-    add('Braço E', m.armLCm);
-    add('Braço D', m.armRCm);
-    add('Coxa', m.thighCm);
-    add('Pant.', m.calfCm);
-    add('Peito', m.chestCm);
     add('Pescoço', m.neckCm);
+    add('Cintura (umbigo)', m.waistCm);
+    add('Quadril (ref.)', m.hipCm);
 
     return parts.length ? parts.join(' • ') : 'Sem valores numéricos.';
   }
@@ -2562,13 +3231,8 @@
         const b = measures[1];
         const lines = [
           `Último registro: ${formatDatePtBr(a.dateISO)} (comparado a ${formatDatePtBr(b.dateISO)})`,
-          diffLine('Cintura', a.waistCm, b.waistCm),
-          diffLine('Quadril', a.hipCm, b.hipCm),
-          diffLine('Braço E', a.armLCm, b.armLCm),
-          diffLine('Braço D', a.armRCm, b.armRCm),
-          diffLine('Coxa', a.thighCm, b.thighCm),
-          diffLine('Panturrilha', a.calfCm, b.calfCm),
-          diffLine('Peito', a.chestCm, b.chestCm),
+          diffLine('Cintura (umbigo)', a.waistCm, b.waistCm),
+          diffLine('Quadril (ref.)', a.hipCm, b.hipCm),
           diffLine('Pescoço', a.neckCm, b.neckCm)
         ].filter(Boolean);
         measuresCompare.textContent = lines.join(' • ');
@@ -2749,8 +3413,31 @@
     const msDelta = computeMeasuresDelta(measuresN);
     const sym = computeCommonSymptoms(injectionsN);
 
+    const lastInj = injectionsN[0] || null;
+    const lastW = weightsN[0] || null;
+    const lastM = measuresN[0] || null;
+
+    const medName = (() => {
+      const counts = new Map();
+      for (const i of injectionsN) {
+        const k = String(i.medName || '').trim();
+        if (!k) continue;
+        counts.set(k, (counts.get(k) || 0) + 1);
+      }
+      let best = '';
+      let bestN = 0;
+      for (const [k, n] of counts.entries()) {
+        if (n > bestN) {
+          best = k;
+          bestN = n;
+        }
+      }
+      return best;
+    })();
+
     return {
       periodDays: d,
+      medicationName: medName,
       injections: {
         count: injectionsN.length,
         meanDaysBetween: injReg.meanDays,
@@ -2773,15 +3460,57 @@
       symptoms: {
         top: sym.top,
         averages: sym.averages
+      },
+      last: {
+        injection: lastInj ? {
+          dateTimeISO: lastInj.dateTimeISO,
+          doseMg: lastInj.doseMg,
+          site: lastInj.site,
+          medName: lastInj.medName
+        } : null,
+        weight: lastW ? {
+          dateTimeISO: lastW.dateTimeISO,
+          weightKg: lastW.weightKg,
+          fasting: Boolean(lastW.fasting)
+        } : null,
+        measures: lastM ? {
+          dateISO: lastM.dateISO,
+          waistCm: lastM.waistCm,
+          hipCm: lastM.hipCm,
+          neckCm: lastM.neckCm
+        } : null
       }
     };
   }
 
   // Requisito: função createAiPrompt(summary)
-  function createAiPrompt(summary) {
+  function createAiPrompt(summary, settings = null) {
     const days = Math.max(1, Math.floor(Number(summary?.periodDays) || 30));
     // IMPORTANTE: o prompt explicita limites (sem prescrição de dose/instrução médica)
     // e pede resposta em cards curtos.
+
+    const medRefUrl = String(settings?.medRefUrl || '').trim();
+    const medOfficialText = String(settings?.medOfficialText || '').trim();
+    const hasOfficial = Boolean(medRefUrl || medOfficialText);
+
+    const officialBlock = hasOfficial
+      ? [
+        '',
+        'Referência oficial do medicamento (fornecida pelo usuário):',
+        medRefUrl ? `- Link: ${medRefUrl}` : '- Link: —',
+        medOfficialText ? `- Trecho (cole abaixo):\n${clampText(medOfficialText, 3500)}` : '- Trecho: —',
+        '',
+        'Regras para usar a referência oficial:',
+        '- Use apenas como base informativa; NÃO prescreva dose nem faça instruções médicas.',
+        '- Se houver conflito entre dados do diário e a referência, destaque como “ponto para checar com médico”.',
+        '- Se faltar informação na referência, diga que não encontrou no trecho fornecido.'
+      ].join('\n')
+      : [
+        '',
+        'Referência oficial do medicamento: não fornecida. Não consultei bula/rotulagem.',
+        'Mantenha sugestões gerais (hábitos/organização) e indique pontos para conversar com profissional.'
+      ].join('\n');
+
     return [
       'Você é um assistente de análise de saúde para um diário de medicação e métricas corporais.',
       'Tarefa: identificar padrões, regularidade, possíveis gatilhos e sugestões de hábitos.',
@@ -2792,6 +3521,7 @@
       '',
       'Resuma em até 6 cards, cada card com: title, insight, action (curta e prática).',
       'Use linguagem em pt-BR, amigável e sem alarmismo.',
+      officialBlock,
       '',
       `Aqui está o resumo estruturado do período selecionado (${days} dias) (JSON):`,
       JSON.stringify(summary, null, 2)
@@ -2940,6 +3670,7 @@
 
     const built = await buildInsightsSummary(d);
     if (insightsSummaryTextEl) insightsSummaryTextEl.value = built.text;
+    renderInsightsSummaryMeta(built);
     const summary = built.summary;
     const prompt = built.prompt;
 
@@ -3334,7 +4065,7 @@
     injIdEl.value = existing?.id || '';
     injDateTimeEl.value = existing ? toLocalDateTimeInputValue(new Date(existing.dateTimeISO)) : toLocalDateTimeInputValue(now());
     injMedNameEl.value = existing?.medName || 'Retatrutida';
-    injDoseEl.value = existing?.doseMg ?? '';
+    injDoseEl.value = formatDecimalForInput(existing?.doseMg ?? '');
     injSiteEl.value = existing?.site || suggestedSite;
     injNotesEl.value = existing?.notes || '';
 
@@ -3407,7 +4138,7 @@
 
     wIdEl.value = existing?.id || '';
     wDateTimeEl.value = existing ? toLocalDateTimeInputValue(new Date(existing.dateTimeISO)) : toLocalDateTimeInputValue(now());
-    wKgEl.value = existing?.weightKg ?? '';
+    wKgEl.value = formatDecimalForInput(existing?.weightKg ?? '');
     wFastingEl.value = existing ? String(Boolean(existing.fasting)) : 'true';
     wNotesEl.value = existing?.notes || '';
 
@@ -3451,14 +4182,14 @@
     mIdEl.value = existing?.id || '';
     mDateEl.value = existing ? existing.dateISO : parseDateInputToISO(toLocalDateTimeInputValue(now()).slice(0, 10)) || toLocalDateTimeInputValue(now()).slice(0, 10);
 
-    mWaistEl.value = existing?.waistCm ?? '';
-    mHipEl.value = existing?.hipCm ?? '';
-    mArmLEl.value = existing?.armLCm ?? '';
-    mArmREl.value = existing?.armRCm ?? '';
-    mThighEl.value = existing?.thighCm ?? '';
-    mCalfEl.value = existing?.calfCm ?? '';
-    mChestEl.value = existing?.chestCm ?? '';
-    mNeckEl.value = existing?.neckCm ?? '';
+    mWaistEl.value = formatDecimalForInput(existing?.waistCm ?? '');
+    mHipEl.value = formatDecimalForInput(existing?.hipCm ?? '');
+    mArmLEl.value = formatDecimalForInput(existing?.armLCm ?? '');
+    mArmREl.value = formatDecimalForInput(existing?.armRCm ?? '');
+    mThighEl.value = formatDecimalForInput(existing?.thighCm ?? '');
+    mCalfEl.value = formatDecimalForInput(existing?.calfCm ?? '');
+    mChestEl.value = formatDecimalForInput(existing?.chestCm ?? '');
+    mNeckEl.value = formatDecimalForInput(existing?.neckCm ?? '');
     mNotesEl.value = existing?.notes || '';
 
     mDialog.showModal();
@@ -3510,16 +4241,22 @@
 
   async function handleAction(action, id) {
     switch (action) {
+      case 'addNextInjectionToCalendar':
+        await exportNextInjectionToCalendar();
+        break;
       case 'quickAddInjection':
       case 'openInjectionForm':
+        clearAttention('injection');
         await openInjectionForm(null);
         break;
       case 'quickAddWeight':
       case 'openWeightForm':
+        clearAttention('weight');
         await openWeightForm(null);
         break;
       case 'quickAddMeasures':
       case 'openMeasuresForm':
+        clearAttention('measures');
         await openMeasuresForm(null);
         break;
       case 'closeInjDialog':
@@ -3585,6 +4322,19 @@
         await refreshAll();
         break;
       }
+      case 'openMedRefUrl': {
+        const url = String(settingsMedRefUrlEl?.value || '').trim();
+        if (!url) {
+          showToast('Cole um link oficial primeiro.');
+          break;
+        }
+        if (!/^https?:\/\//i.test(url)) {
+          showToast('Link inválido. Use um endereço começando com http(s)://');
+          break;
+        }
+        window.open(url, '_blank', 'noopener');
+        break;
+      }
       case 'saveSettings': {
         const route = getRoute();
 
@@ -3635,17 +4385,27 @@
         const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
         const built = await buildInsightsSummary(d);
         if (insightsSummaryTextEl) insightsSummaryTextEl.value = built.text;
+        renderInsightsSummaryMeta(built);
         showToast('Resumo montado.');
         break;
       }
       case 'copyInsightsSummary': {
-        const text = insightsSummaryTextEl?.value || '';
-        await copyTextToClipboard(text);
+        const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
+        const built = await buildInsightsSummary(d);
+        const html = buildInsightsSummaryHtmlFromSummary(built.summary, built.settings);
+        await copyRichToClipboard({ html, text: built.text });
         break;
       }
       case 'shareInsightsSummary': {
-        const text = insightsSummaryTextEl?.value || '';
-        await shareText({ title: 'Resumo (DoseCheck)', text });
+        const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
+        const built = await buildInsightsSummary(d);
+        const html = buildInsightsSummaryHtmlFromSummary(built.summary, built.settings);
+        await shareHtmlFileIfPossible({
+          title: `Resumo DoseCheck (${built.days} dias)`,
+          filename: `dosecheck-resumo-${todayStamp()}.html`,
+          html,
+          textFallback: built.text
+        });
         break;
       }
       case 'refreshReportPreview':
@@ -3709,6 +4469,8 @@
     if (route === 'settings') {
       await renderSettingsView();
     }
+
+    applyAttention();
   }
 
   // -----------------------------
@@ -4010,6 +4772,11 @@
     if (!location.hash) location.hash = '#/dashboard';
 
     showView(getRoute());
+
+    // Deep-link de notificação (ex.: #/dashboard?attention=weight)
+    // Mantém um destaque amarelo até o usuário abrir/acionar o local correto.
+    const attentionKind = readAttentionKindFromHash();
+    if (attentionKind) setAttention(attentionKind, 'Ação solicitada');
 
     // Pré-preencher datas
     if (injDateTimeEl) injDateTimeEl.value = toLocalDateTimeInputValue(now());
