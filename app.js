@@ -1,5 +1,5 @@
 /*
-  PesoMed - app.js
+  DoseCheck - app.js
   PWA offline-first, SPA simples (hash routing), sem frameworks e sem bibliotecas externas.
 
   Principais recursos:
@@ -18,6 +18,7 @@
   // Constantes e utilitários
   // -----------------------------
 
+  // Mantido como 'pesomed-db' para preservar dados existentes após o rename.
   const DB_NAME = 'pesomed-db';
   const DB_VERSION = 1;
 
@@ -2316,7 +2317,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Relatório PesoMed</title>
+  <title>Relatório DoseCheck</title>
   <style>
     :root { color-scheme: light; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
@@ -2371,7 +2372,7 @@
     const d = Math.max(1, Math.floor(Number(summary?.periodDays) || 30));
 
     const lines = [];
-    lines.push(`Resumo (últimos ${d} dias) — PesoMed`);
+    lines.push(`Resumo (últimos ${d} dias) — DoseCheck`);
     if (settings?.patientName) {
       lines.push(`Paciente: ${settings.patientName}${settings.patientBirthYear ? ` (nasc. ${settings.patientBirthYear})` : ''}`);
     }
@@ -3007,7 +3008,7 @@
     ]);
 
     const payload = { injections, weights, measures };
-    downloadText(`pesomed-export-${todayStamp()}.json`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
+    downloadText(`dosecheck-export-${todayStamp()}.json`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
     showToast('Exportação JSON gerada.');
   }
 
@@ -3036,7 +3037,7 @@
       }));
 
     const injHeaders = ['id', 'dateTimeISO', 'medName', 'doseMg', 'site', 'nausea', 'reflux', 'appetite', 'energy', 'bowel', 'notes'];
-    downloadText(`pesomed-injections-${todayStamp()}.csv`, toCsv(injRows, injHeaders), 'text/csv;charset=utf-8');
+    downloadText(`dosecheck-injections-${todayStamp()}.csv`, toCsv(injRows, injHeaders), 'text/csv;charset=utf-8');
 
     // Weights CSV
     const wRows = weights
@@ -3050,7 +3051,7 @@
       }));
 
     const wHeaders = ['id', 'dateTimeISO', 'weightKg', 'fasting', 'notes'];
-    downloadText(`pesomed-weights-${todayStamp()}.csv`, toCsv(wRows, wHeaders), 'text/csv;charset=utf-8');
+    downloadText(`dosecheck-weights-${todayStamp()}.csv`, toCsv(wRows, wHeaders), 'text/csv;charset=utf-8');
 
     // Measures CSV
     const mRows = measures
@@ -3070,7 +3071,7 @@
       }));
 
     const mHeaders = ['id', 'dateISO', 'waistCm', 'hipCm', 'armLCm', 'armRCm', 'thighCm', 'calfCm', 'chestCm', 'neckCm', 'notes'];
-    downloadText(`pesomed-measures-${todayStamp()}.csv`, toCsv(mRows, mHeaders), 'text/csv;charset=utf-8');
+    downloadText(`dosecheck-measures-${todayStamp()}.csv`, toCsv(mRows, mHeaders), 'text/csv;charset=utf-8');
 
     showToast('CSVs gerados (3 arquivos).');
   }
@@ -3214,7 +3215,7 @@
       'notes'
     ];
 
-    downloadText(`pesomed-clinical-${d}d-${todayStamp()}.csv`, toCsv(rows, headers), 'text/csv;charset=utf-8');
+    downloadText(`dosecheck-clinical-${d}d-${todayStamp()}.csv`, toCsv(rows, headers), 'text/csv;charset=utf-8');
     showToast('CSV clínico gerado (1 arquivo).');
   }
 
@@ -3235,7 +3236,7 @@
       measures
     };
 
-    downloadText(`pesomed-backup-${todayStamp()}.json`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
+    downloadText(`dosecheck-backup-${todayStamp()}.json`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
     showToast('Backup gerado.');
   }
 
@@ -3617,7 +3618,7 @@
       }
       case 'shareWeeklySummary': {
         const text = weeklySummaryTextEl?.value || '';
-        await shareText({ title: 'Resumo semanal (PesoMed)', text });
+        await shareText({ title: 'Resumo semanal (DoseCheck)', text });
         break;
       }
       case 'openWeeklySummaryWhatsapp': {
@@ -3644,7 +3645,7 @@
       }
       case 'shareInsightsSummary': {
         const text = insightsSummaryTextEl?.value || '';
-        await shareText({ title: 'Resumo (PesoMed)', text });
+        await shareText({ title: 'Resumo (DoseCheck)', text });
         break;
       }
       case 'refreshReportPreview':

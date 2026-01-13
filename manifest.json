@@ -1,7 +1,7 @@
 {
-  "name": "PesoMed",
-  "short_name": "PesoMed",
-  "description": "PWA offline-first para monitorar aplicações (Retatrutida), peso e medidas corporais.",
+  "name": "DoseCheck",
+  "short_name": "DoseCheck",
+  "description": "DoseCheck: PWA offline-first para monitorar aplicações, peso e medidas corporais.",
   "id": "./",
   "lang": "pt-BR",
   "dir": "ltr",

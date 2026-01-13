@@ -19,7 +19,7 @@
   <rect x="0" y="0" width="1920" height="110" fill="#0b1b2b" opacity="0.92"/>
   <rect x="48" y="22" width="66" height="66" rx="18" fill="url(#accent)" opacity="0.28"/>
   <text x="81" y="66" text-anchor="middle" font-family="system-ui, Segoe UI, Roboto, Arial" font-size="28" fill="#eaf2ff" font-weight="800">PM</text>
-  <text x="132" y="54" font-family="system-ui, Segoe UI, Roboto, Arial" font-size="34" fill="#eaf2ff" font-weight="900">PesoMed</text>
+  <text x="132" y="54" font-family="system-ui, Segoe UI, Roboto, Arial" font-size="34" fill="#eaf2ff" font-weight="900">DoseCheck</text>
   <text x="132" y="82" font-family="system-ui, Segoe UI, Roboto, Arial" font-size="18" fill="#9fb3c8" font-weight="700">offline-first • semana a semana</text>
 
   <!-- Sidebar tabs -->

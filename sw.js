@@ -1,5 +1,5 @@
 /*
-  Service Worker - PesoMed
+  Service Worker - DoseCheck
   Estratégia:
   - Cache-first para assets do app (app shell)
   - Network-first (com fallback) para chamadas de API (quando existirem)
@@ -8,7 +8,7 @@
 */
 
 // Cache com nome estável: facilita atualizar sem precisar “reinstalar” o atalho.
-const CACHE_NAME = 'pesomed-cache';
+const CACHE_NAME = 'dosecheck-cache';
 
 // Atualize a lista se adicionar novos arquivos estáticos.
 const APP_SHELL = [
