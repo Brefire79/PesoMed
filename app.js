@@ -127,10 +127,12 @@
     return streak;
   }
 
-  async function renderWeeklyConsistency(cache, settings) {
+  async function renderWeeklyConsistency(cache, settings, weekOffset = 0) {
     if (!weeklyConsistencyValue || !weeklyConsistencyMeta || !weeklyConsistencyBadge) return;
 
-    const start = startOfWeekMonday(now());
+    const offset = Math.max(0, Math.floor(Number(weekOffset) || 0));
+    const base = startOfWeekMonday(now());
+    const start = addDays(base, -7 * offset);
     const weighDows = new Set(settings.weighDaysOfWeek || DEFAULTS.weighDaysOfWeek);
 
     const expectedWeighKeys = [];
@@ -1099,6 +1101,10 @@
   // -----------------------------
 
   const bannerReminder = document.getElementById('bannerReminder');
+  const bannerUpdate = document.getElementById('bannerUpdate');
+  const bannerUpdateText = document.getElementById('bannerUpdateText');
+  const btnUpdateNow = document.getElementById('btnUpdateNow');
+  const btnUpdateLater = document.getElementById('btnUpdateLater');
 
   const nextInjectionValue = document.getElementById('nextInjectionValue');
   const nextInjectionSub = document.getElementById('nextInjectionSub');
@@ -1138,6 +1144,7 @@
   const weeklyConsistencyHint = document.getElementById('weeklyConsistencyHint');
   const streakWeightsEl = document.getElementById('streakWeights');
   const streakInjectionsEl = document.getElementById('streakInjections');
+  const weeklyConsistencyWeekEl = document.getElementById('weeklyConsistencyWeek');
 
   const weightChartCanvas = document.getElementById('weightChart');
   const weightChartTooltip = document.getElementById('weightChartTooltip');
@@ -1742,7 +1749,8 @@
     await renderDashboardChecklist(cache, settings, n);
 
     try {
-      await renderWeeklyConsistency(cache, settings);
+      const weekOffset = weeklyConsistencyWeekEl?.value ? Number(weeklyConsistencyWeekEl.value) : 0;
+      await renderWeeklyConsistency(cache, settings, weekOffset);
       await renderWeightChart(chartState.rangeDays, cache);
       renderLocalInsights(buildLocalInsights(cache, settings));
     } catch {
@@ -3732,28 +3740,85 @@
     try {
       const registration = await navigator.serviceWorker.register('./sw.js');
 
-      // Se houver SW aguardando, força ativação.
-      if (registration.waiting) {
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      // UX moderna: não recarregar automaticamente.
+      // Mostra banner e deixa o usuário escolher para não perder inputs/formulários.
+      let userAcceptedUpdate = false;
+      let refreshing = false;
+
+      const showUpdateBanner = (mode) => {
+        if (!bannerUpdate) return;
+        const hasWaiting = Boolean(registration.waiting);
+        const m = mode || (hasWaiting ? 'waiting' : 'reload');
+
+        if (bannerUpdateText) {
+          bannerUpdateText.textContent = m === 'waiting'
+            ? 'Atualização disponível. Toque em “Atualizar” para aplicar.'
+            : 'Atualização aplicada. Toque em “Atualizar” para recarregar.';
+        }
+        if (btnUpdateNow) btnUpdateNow.textContent = 'Atualizar';
+        if (btnUpdateLater) btnUpdateLater.textContent = 'Depois';
+        bannerUpdate.hidden = false;
+
+        // Guarda modo atual no DOM (evita estado global extra)
+        bannerUpdate.dataset.mode = m;
+      };
+
+      const hideUpdateBanner = () => {
+        if (!bannerUpdate) return;
+        bannerUpdate.hidden = true;
+        delete bannerUpdate.dataset.mode;
+      };
+
+      btnUpdateLater?.addEventListener('click', () => {
+        hideUpdateBanner();
+        showToast('Ok. Você pode atualizar depois.');
+      });
+
+      btnUpdateNow?.addEventListener('click', async () => {
+        const mode = bannerUpdate?.dataset?.mode || 'waiting';
+        userAcceptedUpdate = true;
+        hideUpdateBanner();
+
+        if (mode === 'waiting' && registration.waiting) {
+          try {
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          } catch {
+            // se falhar, faz fallback pra recarregar
+            location.reload();
+          }
+          return;
+        }
+
+        // Se já ativou, só recarrega.
+        location.reload();
+      });
+
+      // Se já tem update esperando e já existe controller, avisa.
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        showUpdateBanner('waiting');
       }
 
-      // Quando um novo SW for encontrado, tenta ativar imediatamente.
+      // Quando um novo SW for encontrado, ao instalar, oferece a atualização.
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            newWorker.postMessage({ type: 'SKIP_WAITING' });
+            showUpdateBanner('waiting');
           }
         });
       });
 
-      // Quando o SW novo assumir, recarrega 1x para pegar arquivos atualizados.
-      let refreshing = false;
+      // Quando o SW novo assumir: só recarrega se o usuário aceitou.
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
-        location.reload();
+        if (userAcceptedUpdate) {
+          location.reload();
+        } else {
+          // Se ativou por qualquer motivo, ao menos sugere recarregar.
+          showUpdateBanner('reload');
+        }
       });
     } catch {
       // Se falhar, o app ainda funciona online.
@@ -3793,6 +3858,11 @@
 
     insightsRangeEl?.addEventListener('change', () => {
       insightsRangeEl.dataset.userTouched = 'true';
+    });
+
+    weeklyConsistencyWeekEl?.addEventListener('change', () => {
+      if (getRoute() !== 'dashboard') return;
+      renderDashboard().catch(() => {});
     });
 
     // Gráfico: range + tooltip

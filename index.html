@@ -2,9 +2,14 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#0b1b2b" />
   <meta name="description" content="PWA offline-first para monitorar aplicações de Retatrutida, peso e medidas corporais." />
+
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml" />
@@ -38,6 +43,15 @@
 
   <main id="main" class="app" role="main">
     <section id="bannerReminder" class="banner" hidden aria-live="polite"></section>
+    <section id="bannerUpdate" class="banner banner--info" hidden aria-live="polite">
+      <div class="banner__row">
+        <div class="banner__text" id="bannerUpdateText">Atualização disponível.</div>
+        <div class="banner__actions">
+          <button id="btnUpdateNow" class="btn btn--secondary" type="button">Atualizar</button>
+          <button id="btnUpdateLater" class="btn btn--ghost" type="button">Depois</button>
+        </div>
+      </div>
+    </section>
 
     <nav class="tabs" aria-label="Navegação principal">
       <a class="tab" href="#/dashboard" id="tabDashboard">Dashboard</a>
@@ -103,6 +117,15 @@
           <div class="stat">
             <div class="stat__value" id="weeklyConsistencyValue">—</div>
             <div class="stat__sub" id="weeklyConsistencyMeta">Pesagens 0/3 • Aplicação 0/1</div>
+          </div>
+          <div class="row">
+            <div class="field" style="flex: 1; min-width: 180px; margin: 0;">
+              <label class="label" for="weeklyConsistencyWeek">Semana</label>
+              <select id="weeklyConsistencyWeek" class="input" aria-label="Selecionar semana da consistência">
+                <option value="0" selected>Semana atual</option>
+                <option value="1">Semana passada</option>
+              </select>
+            </div>
           </div>
           <div class="pillset" aria-label="Streaks">
             <span class="pill" id="streakWeights">Streak pesagens: —</span>

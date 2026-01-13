@@ -34,7 +34,6 @@ self.addEventListener('install', (event) => {
       const cache = await caches.open(CACHE_NAME);
       // Atualiza os arquivos do app shell dentro do mesmo cache.
       await cache.addAll(APP_SHELL);
-      self.skipWaiting();
     })()
   );
 });
@@ -46,6 +45,17 @@ self.addEventListener('activate', (event) => {
       await Promise.all(
         keys.map((k) => (k === CACHE_NAME ? Promise.resolve() : caches.delete(k)))
       );
+
+      // Boa prática moderna: Navigation Preload (quando suportado)
+      // Ajuda a reduzir latência de navegação em redes lentas.
+      try {
+        if (self.registration && self.registration.navigationPreload) {
+          await self.registration.navigationPreload.enable();
+        }
+      } catch {
+        // Ignora (nem todos browsers suportam)
+      }
+
       self.clients.claim();
     })()
   );
@@ -95,6 +105,13 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       (async () => {
         try {
+          const preload = await event.preloadResponse;
+          if (preload) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put('./index.html', preload.clone());
+            return preload;
+          }
+
           const fresh = await fetch(req);
           const cache = await caches.open(CACHE_NAME);
           cache.put('./index.html', fresh.clone());
