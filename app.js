@@ -2706,6 +2706,19 @@
   }
 
   async function exportReportPdf() {
+    // Primeiro renderiza a prévia localmente
+    await renderReportPreview();
+    showToast('Prévia atualizada. Role para baixo para visualizar.');
+    
+    // Aguarda um momento e depois oferece compartilhamento
+    setTimeout(() => {
+      if (confirm('Deseja abrir o relatório em nova aba para compartilhar/salvar PDF?')) {
+        openReportInNewTab();
+      }
+    }, 800);
+  }
+
+  async function openReportInNewTab() {
     const settings = await getSettings();
     const rangeDays = reportRangeEl?.value ? Number(reportRangeEl.value) : (settings.preferredReportRangeDays || DEFAULTS.preferredReportRangeDays);
     const patientName = reportPatientNameEl?.value || settings.patientName || '';
@@ -4342,6 +4355,7 @@
           await saveSettings(readSettingsFromSettingsView());
           showToast('Configurações salvas.');
           await refreshAll();
+          window.location.hash = '#/dashboard';
           break;
         }
 
