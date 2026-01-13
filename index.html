@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1b2b" />
+  <meta name="description" content="PWA offline-first para monitorar aplicações de Retatrutida, peso e medidas corporais." />
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml" />
+
+  <title>PesoMed</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Pular para conteúdo</a>
+
+  <header class="app-header" role="banner">
+    <div class="app-header__left">
+      <div class="brand" aria-label="PesoMed">
+        <span class="brand__mark" aria-hidden="true">PM</span>
+        <div class="brand__text">
+          <div class="brand__name">PesoMed</div>
+          <div class="brand__tag">offline-first • semana a semana</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-header__right">
+      <button id="btnInstall" class="btn btn--ghost" type="button" hidden>
+        Instalar
+      </button>
+      <button id="btnOpenMenu" class="btn btn--ghost" type="button" aria-haspopup="dialog" aria-controls="menuDialog">
+        Menu
+      </button>
+    </div>
+  </header>
+
+  <main id="main" class="app" role="main">
+    <section id="bannerReminder" class="banner" hidden aria-live="polite"></section>
+
+    <nav class="tabs" aria-label="Navegação principal">
+      <a class="tab" href="#/dashboard" id="tabDashboard">Dashboard</a>
+      <a class="tab" href="#/injections" id="tabInjections">Aplicações</a>
+      <a class="tab" href="#/body" id="tabBody">Peso & Medidas</a>
+      <a class="tab" href="#/insights" id="tabInsights">Insights IA</a>
+      <a class="tab" href="#/report" id="tabReport">Relatório</a>
+      <a class="tab" href="#/settings" id="tabSettings">Config</a>
+    </nav>
+
+    <section id="viewDashboard" class="view" aria-labelledby="hDashboard">
+      <h1 id="hDashboard" class="view__title">Dashboard</h1>
+
+      <div class="grid">
+        <article class="card" aria-label="Próxima aplicação">
+          <h2 class="card__title">Próxima aplicação</h2>
+          <div class="stat">
+            <div class="stat__value" id="nextInjectionValue">—</div>
+            <div class="stat__sub" id="nextInjectionSub">Configure seu lembrete ou registre uma aplicação.</div>
+          </div>
+          <div class="row">
+            <button class="btn" type="button" data-action="quickAddInjection">Registrar aplicação</button>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Peso e variação">
+          <h2 class="card__title">Último peso</h2>
+          <div class="stat">
+            <div class="stat__value" id="lastWeightValue">—</div>
+            <div class="stat__sub" id="lastWeightSub">Sem registros ainda.</div>
+          </div>
+          <div class="pillset" aria-label="Variações">
+            <span class="pill" id="delta7">7d: —</span>
+            <span class="pill" id="delta14">14d: —</span>
+            <span class="pill" id="delta30">30d: —</span>
+          </div>
+          <div class="row">
+            <button class="btn" type="button" data-action="quickAddWeight">Registrar peso</button>
+            <button class="btn btn--secondary" type="button" data-action="quickAddMeasures">Registrar medidas</button>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Checklist de hoje">
+          <div class="card__head">
+            <h2 class="card__title">Checklist de hoje</h2>
+            <span id="checklistTodayBadge" class="chip" aria-live="polite">—</span>
+          </div>
+          <p class="muted" id="checklistTodayMeta">Baseado na sua agenda fixa.</p>
+          <div id="checklistTodayAlerts" class="banner" hidden aria-live="polite"></div>
+          <div id="checklistTodayList" class="list" role="list"></div>
+          <div class="row">
+            <button class="btn" type="button" data-action="quickAddWeight">Registrar peso</button>
+            <button class="btn" type="button" data-action="quickAddInjection">Registrar aplicação</button>
+            <button class="btn btn--secondary" type="button" data-action="quickAddMeasures">Registrar medidas</button>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Consistência e streak">
+          <div class="card__head">
+            <h2 class="card__title">Consistência da semana</h2>
+            <span id="weeklyConsistencyBadge" class="chip" aria-live="polite">—</span>
+          </div>
+          <div class="stat">
+            <div class="stat__value" id="weeklyConsistencyValue">—</div>
+            <div class="stat__sub" id="weeklyConsistencyMeta">Pesagens 0/3 • Aplicação 0/1</div>
+          </div>
+          <div class="pillset" aria-label="Streaks">
+            <span class="pill" id="streakWeights">Streak pesagens: —</span>
+            <span class="pill" id="streakInjections">Streak aplicações: —</span>
+          </div>
+          <p class="muted" id="weeklyConsistencyHint">Baseado na agenda fixa (seg/qua/sex e sábado).</p>
+        </article>
+
+        <article class="card" aria-label="Evolução do peso">
+          <div class="card__head">
+            <h2 class="card__title">Evolução do Peso</h2>
+            <div class="segmented" role="group" aria-label="Período do gráfico">
+              <button class="segmented__btn" type="button" id="weightChartRange30" data-range="30" aria-pressed="true">30d</button>
+              <button class="segmented__btn" type="button" id="weightChartRange90" data-range="90" aria-pressed="false">90d</button>
+            </div>
+          </div>
+          <p class="muted" id="weightChartMeta">Toque em um ponto para ver data e peso.</p>
+          <div class="chart" aria-label="Gráfico de peso">
+            <canvas id="weightChart" class="chart__canvas" width="320" height="180"></canvas>
+            <div id="weightChartTooltip" class="chart__tooltip" hidden></div>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Resumo semanal">
+          <div class="card__head">
+            <h2 class="card__title">Resumo semanal (WhatsApp)</h2>
+            <button class="btn btn--secondary" type="button" data-action="generateWeeklySummary">Gerar resumo semanal</button>
+          </div>
+          <p class="muted">Texto pronto para copiar/compartilhar. Sem orientação médica.</p>
+          <textarea id="weeklySummaryText" class="input" rows="10" readonly placeholder="Toque em “Gerar resumo semanal”."></textarea>
+          <div class="row">
+            <button class="btn" type="button" data-action="copyWeeklySummary">Copiar</button>
+            <button class="btn btn--secondary" type="button" data-action="shareWeeklySummary">Compartilhar</button>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Insights automáticos">
+          <h2 class="card__title">Insights automáticos</h2>
+          <p class="muted">Regras simples locais (isso não é diagnóstico).</p>
+          <div id="localInsightsList" class="list" role="list"></div>
+        </article>
+
+        <article class="card" aria-label="Próximos 7 dias">
+          <h2 class="card__title">Próximos 7 dias</h2>
+          <p class="muted">O que sua agenda pede (e o que já está feito).</p>
+          <div id="checklistUpcomingList" class="list" role="list"></div>
+        </article>
+
+        <article class="card" aria-label="Linha do tempo">
+          <h2 class="card__title">Linha do tempo</h2>
+          <p class="muted">Aplicações e pesos em ordem cronológica (mais recentes primeiro).</p>
+          <div id="timelineList" class="list" role="list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="viewInjections" class="view" aria-labelledby="hInjections" hidden>
+      <div class="view__head">
+        <h1 id="hInjections" class="view__title">Aplicações</h1>
+        <button class="btn" type="button" data-action="openInjectionForm">+ Nova</button>
+      </div>
+
+      <div class="card">
+        <div class="field">
+          <label class="label" for="injFilter">Filtro</label>
+          <select id="injFilter" class="input">
+            <option value="30">Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="all">Tudo</option>
+          </select>
+        </div>
+        <div id="injectionList" class="list" role="list"></div>
+      </div>
+    </section>
+
+    <section id="viewBody" class="view" aria-labelledby="hBody" hidden>
+      <div class="view__head">
+        <h1 id="hBody" class="view__title">Peso & Medidas</h1>
+      </div>
+
+      <div class="grid grid--2">
+        <article class="card" aria-label="Peso">
+          <div class="card__head">
+            <h2 class="card__title">Peso</h2>
+            <button class="btn" type="button" data-action="openWeightForm">+ Peso</button>
+          </div>
+          <div id="weightList" class="list" role="list"></div>
+        </article>
+
+        <article class="card" aria-label="Medidas">
+          <div class="card__head">
+            <h2 class="card__title">Medidas</h2>
+            <button class="btn" type="button" data-action="openMeasuresForm">+ Medidas</button>
+          </div>
+          <div id="measuresCompare" class="compare" aria-live="polite"></div>
+          <div id="measuresList" class="list" role="list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="viewInsights" class="view" aria-labelledby="hInsights" hidden>
+      <div class="view__head">
+        <h1 id="hInsights" class="view__title">Insights IA</h1>
+        <div class="row">
+          <button class="btn btn--secondary" type="button" data-action="buildInsightsSummary">Montar resumo (30 dias)</button>
+          <button class="btn" type="button" data-action="runInsights">Analisar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="muted">
+          A IA aqui serve para identificar padrões e hábitos. Ela <strong>não</strong> deve prescrever dose, nem dar instruções médicas.
+        </p>
+        <details>
+          <summary>O que será analisado (últimos 30 dias)</summary>
+          <ul>
+            <li>Regularidade das aplicações</li>
+            <li>Tendência de peso (sem gráficos complexos)</li>
+            <li>Variação de medidas</li>
+            <li>Sintomas mais comuns</li>
+          </ul>
+        </details>
+        <div id="insightsStatus" class="status" aria-live="polite"></div>
+        <div class="field">
+          <label class="label" for="insightsSummaryText">Resumo montado (1 clique)</label>
+          <textarea id="insightsSummaryText" class="input" rows="10" readonly placeholder="Toque em “Montar resumo (30 dias)”."></textarea>
+          <div class="hint">Dica: use “Copiar” para mandar ao seu médico, ou “Analisar” para obter insights (mock offline).</div>
+        </div>
+        <div class="row">
+          <button class="btn" type="button" data-action="copyInsightsSummary">Copiar</button>
+          <button class="btn btn--secondary" type="button" data-action="shareInsightsSummary">Compartilhar</button>
+        </div>
+        <div id="insightsCards" class="cards"></div>
+      </div>
+    </section>
+
+    <section id="viewReport" class="view" aria-labelledby="hReport" hidden>
+      <div class="view__head">
+        <h1 id="hReport" class="view__title">Relatório Médico</h1>
+      </div>
+
+      <div class="card">
+        <div class="grid grid--2">
+          <div class="field">
+            <label class="label" for="reportRange">Período</label>
+            <select id="reportRange" class="input">
+              <option value="30">Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="180">Últimos 180 dias</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="reportPatientName">Paciente (informativo)</label>
+            <input id="reportPatientName" class="input" type="text" placeholder="Nome (opcional)" />
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="btn" type="button" data-action="exportReportPdf">Exportar PDF</button>
+          <button class="btn btn--secondary" type="button" data-action="refreshReportPreview">Atualizar prévia</button>
+        </div>
+
+        <p class="muted">Exportar PDF abre uma nova aba e sugere “Salvar como PDF”.</p>
+        <div id="reportPreview" class="reportPreview" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="viewSettings" class="view" aria-labelledby="hSettings" hidden>
+      <div class="view__head">
+        <h1 id="hSettings" class="view__title">Configurações</h1>
+      </div>
+
+      <div class="grid grid--2">
+        <article class="card" aria-label="Dados do paciente">
+          <h2 class="card__title">Paciente (opcional)</h2>
+          <div class="field">
+            <label class="label" for="settingsPatientName">Nome</label>
+            <input id="settingsPatientName" class="input" type="text" placeholder="Ex.: Breno" />
+          </div>
+          <div class="field">
+            <label class="label" for="settingsPatientBirthYear">Ano de nascimento</label>
+            <input id="settingsPatientBirthYear" class="input" type="number" min="1900" max="2100" step="1" inputmode="numeric" placeholder="Ex.: 1995" />
+          </div>
+          <div class="field">
+            <label class="label" for="settingsPreferredReportRange">Período padrão do relatório</label>
+            <select id="settingsPreferredReportRange" class="input">
+              <option value="30">30 dias</option>
+              <option value="90">90 dias</option>
+              <option value="180">180 dias</option>
+            </select>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Agenda fixa">
+          <h2 class="card__title">Agenda fixa</h2>
+          <div class="grid grid--2">
+            <div class="field">
+              <label class="label" for="settingsInjectionDow">Dia da aplicação</label>
+              <select id="settingsInjectionDow" class="input">
+                <option value="0">Domingo</option>
+                <option value="1">Segunda</option>
+                <option value="2">Terça</option>
+                <option value="3">Quarta</option>
+                <option value="4">Quinta</option>
+                <option value="5">Sexta</option>
+                <option value="6">Sábado</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label" for="settingsInjectionTime">Hora da aplicação</label>
+              <input id="settingsInjectionTime" class="input" type="time" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label">Dias de pesagem</label>
+            <div class="row" aria-label="Dias de pesagem (0=Dom ... 6=Sáb)">
+              <label class="chip"><input type="checkbox" id="weighDow1" /> Seg</label>
+              <label class="chip"><input type="checkbox" id="weighDow3" /> Qua</label>
+              <label class="chip"><input type="checkbox" id="weighDow5" /> Sex</label>
+            </div>
+            <div class="hint">Recomendado: seg/qua/sex de manhã.</div>
+          </div>
+
+          <div class="field">
+            <label class="label" for="settingsMeasureEvery">Medidas: intervalo (dias)</label>
+            <input id="settingsMeasureEvery" class="input" type="number" min="7" step="1" inputmode="numeric" />
+          </div>
+        </article>
+
+        <article class="card" aria-label="Rodízio">
+          <h2 class="card__title">Rodízio de local</h2>
+          <div class="field">
+            <label class="label" for="settingsEnableArmSites">Incluir braços no rodízio</label>
+            <select id="settingsEnableArmSites" class="input">
+              <option value="false">Não (padrão)</option>
+              <option value="true">Sim</option>
+            </select>
+            <div class="hint">Se desativado, o rodízio usa apenas abdômen/coxa.</div>
+          </div>
+        </article>
+
+        <article class="card" aria-label="Salvar configurações">
+          <h2 class="card__title">Salvar</h2>
+          <p class="muted">As configurações são locais (offline-first).</p>
+          <div class="row">
+            <button class="btn" type="button" data-action="saveSettings">Salvar configurações</button>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- Dialog: Menu / Config / Export / Backup -->
+  <dialog id="menuDialog" class="dialog" aria-labelledby="menuTitle">
+    <form method="dialog" class="dialog__content">
+      <div class="dialog__head">
+        <h2 id="menuTitle">Menu</h2>
+        <button class="btn btn--ghost" value="cancel" aria-label="Fechar">Fechar</button>
+      </div>
+
+      <div class="dialog__body">
+        <section class="card">
+          <h3 class="card__title">Lembrete semanal</h3>
+          <p class="muted">Apenas um aviso visual no app (sem push).</p>
+
+          <div class="grid grid--2">
+            <div class="field">
+              <label class="label" for="reminderDow">Dia da semana</label>
+              <select id="reminderDow" class="input">
+                <option value="">(não configurar)</option>
+                <option value="0">Domingo</option>
+                <option value="1">Segunda</option>
+                <option value="2">Terça</option>
+                <option value="3">Quarta</option>
+                <option value="4">Quinta</option>
+                <option value="5">Sexta</option>
+                <option value="6">Sábado</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label" for="reminderTime">Hora</label>
+              <input id="reminderTime" class="input" type="time" />
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn" type="button" data-action="saveSettings">Salvar lembrete</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">Agenda fixa (Checklist & Alertas)</h3>
+          <p class="muted">Padrão: aplicação sábado 09:51 • pesagem seg/qua/sex • medidas a cada 14 dias (lembrete leve).</p>
+
+          <div class="grid grid--2">
+            <div class="field">
+              <label class="label" for="scheduleInjectionTime">Horário da aplicação (sábado)</label>
+              <input id="scheduleInjectionTime" class="input" type="time" />
+            </div>
+            <div class="field">
+              <label class="label" for="scheduleMeasureEvery">Medidas: intervalo (dias)</label>
+              <input id="scheduleMeasureEvery" class="input" type="number" min="7" step="1" inputmode="numeric" />
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="hint">Pesagem (fixo): segunda/quarta/sexta de manhã. Aplicação (fixo): sábado.</div>
+          </div>
+
+          <div class="row">
+            <button class="btn" type="button" data-action="saveSettings">Salvar agenda</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">Exportação</h3>
+          <div class="row">
+            <button class="btn btn--secondary" type="button" data-action="exportJson">Exportar JSON</button>
+            <button class="btn btn--secondary" type="button" data-action="exportCsv">Exportar CSV</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">Backup / Restore</h3>
+          <p class="muted">O backup inclui aplicações, pesos, medidas e configurações.</p>
+          <div class="row">
+            <button class="btn btn--secondary" type="button" data-action="downloadBackup">Baixar backup (.json)</button>
+            <label class="btn btn--secondary" for="restoreFile">Restaurar</label>
+            <input id="restoreFile" type="file" accept="application/json" hidden />
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">Manutenção</h3>
+          <div class="row">
+            <button class="btn btn--danger" type="button" data-action="wipeAll">Apagar tudo</button>
+          </div>
+        </section>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog: Injection Form -->
+  <dialog id="injDialog" class="dialog" aria-labelledby="injTitle">
+    <form class="dialog__content" id="injForm">
+      <div class="dialog__head">
+        <h2 id="injTitle">Registrar aplicação</h2>
+        <button class="btn btn--ghost" type="button" data-action="closeInjDialog" aria-label="Fechar">Fechar</button>
+      </div>
+
+      <div class="dialog__body">
+        <input type="hidden" id="injId" />
+
+        <div class="field">
+          <label class="label" for="injDateTime">Data e hora</label>
+          <input id="injDateTime" class="input" type="datetime-local" required />
+        </div>
+
+        <div class="grid grid--2">
+          <div class="field">
+            <label class="label" for="injMedName">Medicamento</label>
+            <input id="injMedName" class="input" type="text" value="Retatrutida" required />
+          </div>
+          <div class="field">
+            <label class="label" for="injDose">Dose (mg)</label>
+            <input id="injDose" class="input" type="number" min="0" step="0.1" inputmode="decimal" required />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="label" for="injSite">Local (sugerido automaticamente)</label>
+          <select id="injSite" class="input" required>
+            <option value="abdomen_right">Abdômen (direito)</option>
+            <option value="abdomen_left">Abdômen (esquerdo)</option>
+            <option value="thigh_right">Coxa (direita)</option>
+            <option value="thigh_left">Coxa (esquerda)</option>
+            <option value="arm_right">Braço (direito)</option>
+            <option value="arm_left">Braço (esquerdo)</option>
+          </select>
+          <div class="hint" id="injSiteHint">Dica: alternar lados ajuda a manter um rodízio simples.</div>
+        </div>
+
+        <fieldset class="fieldset">
+          <legend>Sintomas (0 a 10)</legend>
+          <div class="grid grid--2">
+            <div class="field">
+              <label class="label" for="symNausea">Enjoo</label>
+              <input id="symNausea" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="symNauseaVal">0</div>
+            </div>
+            <div class="field">
+              <label class="label" for="symReflux">Azia</label>
+              <input id="symReflux" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="symRefluxVal">0</div>
+            </div>
+            <div class="field">
+              <label class="label" for="symAppetite">Apetite</label>
+              <input id="symAppetite" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="symAppetiteVal">0</div>
+            </div>
+            <div class="field">
+              <label class="label" for="symEnergy">Energia</label>
+              <input id="symEnergy" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="symEnergyVal">0</div>
+            </div>
+            <div class="field">
+              <label class="label" for="symBowel">Intestino</label>
+              <input id="symBowel" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="symBowelVal">0</div>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label class="label" for="injNotes">Observação</label>
+          <textarea id="injNotes" class="input" rows="3" placeholder="Ex.: dormi mal, comi tarde, viajei…"></textarea>
+        </div>
+
+        <div class="row">
+          <button class="btn" type="submit">Salvar</button>
+          <button class="btn btn--secondary" type="button" data-action="clearInjForm">Limpar</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog: Weight Form -->
+  <dialog id="wDialog" class="dialog" aria-labelledby="wTitle">
+    <form class="dialog__content" id="wForm">
+      <div class="dialog__head">
+        <h2 id="wTitle">Registrar peso</h2>
+        <button class="btn btn--ghost" type="button" data-action="closeWDialog" aria-label="Fechar">Fechar</button>
+      </div>
+
+      <div class="dialog__body">
+        <input type="hidden" id="wId" />
+
+        <div class="field">
+          <label class="label" for="wDateTime">Data e hora</label>
+          <input id="wDateTime" class="input" type="datetime-local" required />
+        </div>
+
+        <div class="grid grid--2">
+          <div class="field">
+            <label class="label" for="wKg">Peso (kg)</label>
+            <input id="wKg" class="input" type="number" min="0" step="0.1" inputmode="decimal" required />
+          </div>
+          <div class="field">
+            <label class="label" for="wFasting">Jejum</label>
+            <select id="wFasting" class="input">
+              <option value="true">Sim</option>
+              <option value="false">Não</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="label" for="wNotes">Observação</label>
+          <textarea id="wNotes" class="input" rows="3" placeholder="Ex.: após treino, retenção, etc."></textarea>
+        </div>
+
+        <div class="row">
+          <button class="btn" type="submit">Salvar</button>
+          <button class="btn btn--secondary" type="button" data-action="clearWForm">Limpar</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog: Measures Form -->
+  <dialog id="mDialog" class="dialog" aria-labelledby="mTitle">
+    <form class="dialog__content" id="mForm">
+      <div class="dialog__head">
+        <h2 id="mTitle">Registrar medidas</h2>
+        <button class="btn btn--ghost" type="button" data-action="closeMDialog" aria-label="Fechar">Fechar</button>
+      </div>
+
+      <div class="dialog__body">
+        <input type="hidden" id="mId" />
+
+        <div class="field">
+          <label class="label" for="mDate">Data</label>
+          <input id="mDate" class="input" type="date" required />
+        </div>
+
+        <div class="grid grid--2">
+          <div class="field"><label class="label" for="mWaist">Cintura (cm)</label><input id="mWaist" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
+          <div class="field"><label class="label" for="mHip">Quadril (cm)</label><input id="mHip" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
+          <div class="field"><label class="label" for="mArmL">Braço esq (cm)</label><input id="mArmL" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
+          <div class="field"><label class="label" for="mArmR">Braço dir (cm)</label><input id="mArmR" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
+          <div class="field"><label class="label" for="mThigh">Coxa (cm)</label><input id="mThigh" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
+          <div class="field"><label class="label" for="mCalf">Panturrilha (cm)</label><input id="mCalf" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
+          <div class="field"><label class="label" for="mChest">Peito (cm)</label><input id="mChest" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
+          <div class="field"><label class="label" for="mNeck">Pescoço (cm)</label><input id="mNeck" class="input" type="number" min="0" step="0.1" inputmode="decimal" /></div>
+        </div>
+
+        <div class="field">
+          <label class="label" for="mNotes">Observação</label>
+          <textarea id="mNotes" class="input" rows="3" placeholder="Ex.: fita no umbigo, ao acordar, etc."></textarea>
+        </div>
+
+        <div class="row">
+          <button class="btn" type="submit">Salvar</button>
+          <button class="btn btn--secondary" type="button" data-action="clearMForm">Limpar</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
