@@ -2,11 +2,26 @@
   "name": "PesoMed",
   "short_name": "PesoMed",
   "description": "PWA offline-first para monitorar aplicações (Retatrutida), peso e medidas corporais.",
-  "start_url": "./index.html#/dashboard",
+  "id": "./",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "./#/dashboard",
   "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "orientation": "portrait-primary",
   "background_color": "#07111c",
   "theme_color": "#0b1b2b",
+  "categories": ["health", "medical", "lifestyle", "productivity"],
+  "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "icons": [
     {
       "src": "./icons/icon-192.svg",
@@ -25,6 +40,48 @@
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Abrir o painel principal",
+      "url": "./#/dashboard"
+    },
+    {
+      "name": "Nova aplicação",
+      "short_name": "+ Aplic",
+      "description": "Ir para Aplicações",
+      "url": "./#/injections"
+    },
+    {
+      "name": "Registrar peso",
+      "short_name": "+ Peso",
+      "description": "Ir para Peso & Medidas",
+      "url": "./#/body"
+    },
+    {
+      "name": "Relatório",
+      "short_name": "Relatório",
+      "description": "Abrir o Relatório médico",
+      "url": "./#/report"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "./icons/screenshot-narrow.svg",
+      "sizes": "1080x1920",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "Dashboard (mobile)"
+    },
+    {
+      "src": "./icons/screenshot-wide.svg",
+      "sizes": "1920x1080",
+      "type": "image/svg+xml",
+      "form_factor": "wide",
+      "label": "Dashboard (desktop)"
     }
   ]
 }

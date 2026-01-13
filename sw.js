@@ -19,7 +19,9 @@ const APP_SHELL = [
   './manifest.json',
   './icons/icon-192.svg',
   './icons/icon-512.svg',
-  './icons/maskable-512.svg'
+  './icons/maskable-512.svg',
+  './icons/screenshot-narrow.svg',
+  './icons/screenshot-wide.svg'
 ];
 
 self.addEventListener('message', (event) => {
