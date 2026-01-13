@@ -1118,6 +1118,7 @@
   const insightsStatus = document.getElementById('insightsStatus');
   const insightsCards = document.getElementById('insightsCards');
   const insightsSummaryTextEl = document.getElementById('insightsSummaryText');
+  const insightsRangeEl = document.getElementById('insightsRange');
 
   const menuDialog = document.getElementById('menuDialog');
   const btnOpenMenu = document.getElementById('btnOpenMenu');
@@ -2345,17 +2346,17 @@
 
   async function buildInsightsSummaryText(days = 30) {
     const settings = await getSettings();
+    const d = Math.max(1, Math.floor(Number(days) || 30));
     const [injections, weights, measures] = await Promise.all([
       getAll(STORE_INJECTIONS),
       getAll(STORE_WEIGHTS),
       getAll(STORE_MEASURES)
     ]);
 
-    // Mantemos o resumo estruturado existente (30 dias) e convertemos para texto curto.
-    const summary = buildLast30DaysSummary({ injections, weights, measures });
+    const summary = buildLastNDaysSummary(d, { injections, weights, measures });
 
     const lines = [];
-    lines.push(`Resumo (últimos ${days} dias) — PesoMed`);
+    lines.push(`Resumo (últimos ${d} dias) — PesoMed`);
     if (settings.patientName) {
       lines.push(`Paciente: ${settings.patientName}${settings.patientBirthYear ? ` (nasc. ${settings.patientBirthYear})` : ''}`);
     }
@@ -2695,32 +2696,32 @@
     return { top, averages };
   }
 
-  function buildLast30DaysSummary(data) {
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  function buildLastNDaysSummary(days, data) {
+    const d = Math.max(1, Math.floor(Number(days) || 30));
+    const cutoff = new Date(Date.now() - d * 24 * 60 * 60 * 1000);
 
-    const injections30 = data.injections.filter((i) => new Date(i.dateTimeISO) >= cutoff).sort(sortByDateTimeDesc);
-    const weights30 = data.weights.filter((w) => new Date(w.dateTimeISO) >= cutoff).sort(sortByDateTimeDesc);
-    const measures30 = data.measures.filter((m) => {
-      // dateISO
+    const injectionsN = data.injections.filter((i) => new Date(i.dateTimeISO) >= cutoff).sort(sortByDateTimeDesc);
+    const weightsN = data.weights.filter((w) => new Date(w.dateTimeISO) >= cutoff).sort(sortByDateTimeDesc);
+    const measuresN = data.measures.filter((m) => {
       const dt = new Date(`${m.dateISO}T00:00:00`);
       return dt >= cutoff;
     }).sort(sortByDateDesc);
 
-    const injReg = computeInjectionRegularity(injections30);
-    const wtTrend = computeWeightTrend(weights30);
-    const msDelta = computeMeasuresDelta(measures30);
-    const sym = computeCommonSymptoms(injections30);
+    const injReg = computeInjectionRegularity(injectionsN);
+    const wtTrend = computeWeightTrend(weightsN);
+    const msDelta = computeMeasuresDelta(measuresN);
+    const sym = computeCommonSymptoms(injectionsN);
 
     return {
-      periodDays: 30,
+      periodDays: d,
       injections: {
-        count: injections30.length,
+        count: injectionsN.length,
         meanDaysBetween: injReg.meanDays,
         onTimeRate: injReg.onTimeRate,
         notes: injReg.notes
       },
       weight: {
-        count: weights30.length,
+        count: weightsN.length,
         startKg: wtTrend.start?.weightKg ?? null,
         endKg: wtTrend.end?.weightKg ?? null,
         deltaKg: wtTrend.deltaKg,
@@ -2728,7 +2729,7 @@
         notes: wtTrend.notes
       },
       measures: {
-        count: measures30.length,
+        count: measuresN.length,
         deltaByField: msDelta.deltas,
         notes: msDelta.notes
       },
@@ -2741,6 +2742,7 @@
 
   // Requisito: função createAiPrompt(summary)
   function createAiPrompt(summary) {
+    const days = Math.max(1, Math.floor(Number(summary?.periodDays) || 30));
     // IMPORTANTE: o prompt explicita limites (sem prescrição de dose/instrução médica)
     // e pede resposta em cards curtos.
     return [
@@ -2754,7 +2756,7 @@
       'Resuma em até 6 cards, cada card com: title, insight, action (curta e prática).',
       'Use linguagem em pt-BR, amigável e sem alarmismo.',
       '',
-      'Aqui está o resumo estruturado dos últimos 30 dias (JSON):',
+      `Aqui está o resumo estruturado do período selecionado (${days} dias) (JSON):`,
       JSON.stringify(summary, null, 2)
     ].join('\n');
   }
@@ -2776,6 +2778,7 @@
   }
 
   function mockAnalyze(summary) {
+    const days = Math.max(1, Math.floor(Number(summary?.periodDays) || 30));
     // Mock local: resposta em cards com recomendações não-médicas.
     const cards = [];
 
@@ -2783,14 +2786,14 @@
     if (inj.count === 0) {
       cards.push({
         title: 'Sem aplicações registradas',
-        insight: 'Não encontrei registros de aplicação nos últimos 30 dias. Pode ser que você tenha pausado ou só não registrou.',
+        insight: `Não encontrei registros de aplicação nos últimos ${days} dias. Pode ser que você tenha pausado ou só não registrou.`,
         action: 'Se aplicou, registre as datas para melhorar seus insights.'
       });
     } else {
       const rate = inj.onTimeRate === null ? null : Math.round(inj.onTimeRate * 100);
       cards.push({
         title: 'Regularidade',
-        insight: `Você registrou ${inj.count} aplicação(ões) nos últimos 30 dias. ${inj.meanDaysBetween ? `Média de ${inj.meanDaysBetween.toFixed(1).replace('.', ',')} dias entre aplicações.` : ''}`,
+        insight: `Você registrou ${inj.count} aplicação(ões) nos últimos ${days} dias. ${inj.meanDaysBetween ? `Média de ${inj.meanDaysBetween.toFixed(1).replace('.', ',')} dias entre aplicações.` : ''}`,
         action: rate !== null
           ? `Rotina semanal “no ritmo”: ${rate}% dos intervalos entre 6–8 dias. Ajuste agenda/lembrete se precisar.`
           : 'Registre pelo menos 2 aplicações para avaliar a regularidade.'
@@ -2803,14 +2806,14 @@
       const sign = delta > 0 ? '+' : '';
       const perWeek = wt.perWeekKg;
       cards.push({
-        title: 'Tendência de peso (30 dias)',
+        title: `Tendência de peso (${days} dias)`,
         insight: `Variação aproximada: ${sign}${delta.toFixed(1).replace('.', ',')} kg (de ${wt.startKg.toFixed(1).replace('.', ',')} para ${wt.endKg.toFixed(1).replace('.', ',')}).`,
         action: `Tendência por semana: ${perWeek >= 0 ? '+' : ''}${perWeek.toFixed(2).replace('.', ',')} kg/semana. Compare sempre em condições parecidas (ex.: jejum).`
       });
     } else {
       cards.push({
         title: 'Peso: dados insuficientes',
-        insight: 'Com menos de 2 registros de peso em 30 dias, fica difícil identificar tendência.',
+        insight: `Com menos de 2 registros de peso em ${days} dias, fica difícil identificar tendência.`,
         action: 'Tente pesar 2–3x por semana (idealmente no mesmo horário/condição).' 
       });
     }
@@ -2894,7 +2897,8 @@
   }
 
   async function runInsights() {
-    insightsStatus.textContent = 'Preparando resumo dos últimos 30 dias…';
+    const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
+    insightsStatus.textContent = `Preparando resumo dos últimos ${d} dias…`;
     clearChildren(insightsCards);
 
     const [injections, weights, measures] = await Promise.all([
@@ -2903,7 +2907,7 @@
       getAll(STORE_MEASURES)
     ]);
 
-    const summary = buildLast30DaysSummary({ injections, weights, measures });
+    const summary = buildLastNDaysSummary(d, { injections, weights, measures });
     const prompt = createAiPrompt(summary);
 
     insightsStatus.textContent = 'Chamando /api/analyze (fallback local se indisponível)…';
@@ -2918,6 +2922,11 @@
       insightsStatus.textContent = 'Modo offline/mock: exibindo análise local.';
       renderInsightsCards(mock);
     }
+  }
+
+  function formatTimeHHmmPtBr(dateTimeISO) {
+    const d = new Date(dateTimeISO);
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
   }
 
   // -----------------------------
@@ -3032,6 +3041,149 @@
     downloadText(`pesomed-measures-${todayStamp()}.csv`, toCsv(mRows, mHeaders), 'text/csv;charset=utf-8');
 
     showToast('CSVs gerados (3 arquivos).');
+  }
+
+  async function exportClinicalCsv() {
+    const settings = await getSettings();
+    const rangeDays = reportRangeEl?.value
+      ? Number(reportRangeEl.value)
+      : (settings.preferredReportRangeDays || DEFAULTS.preferredReportRangeDays);
+    const d = Math.max(1, Math.floor(Number(rangeDays) || 90));
+
+    const patientName = reportPatientNameEl?.value || settings.patientName || '';
+    const patientBirthYear = settings.patientBirthYear || '';
+    const exportedAtISO = new Date().toISOString();
+    const cutoff = new Date(Date.now() - d * 24 * 60 * 60 * 1000);
+
+    const [injections, weights, measures] = await Promise.all([
+      getAll(STORE_INJECTIONS),
+      getAll(STORE_WEIGHTS),
+      getAll(STORE_MEASURES)
+    ]);
+
+    const rows = [];
+
+    for (const w of weights) {
+      if (new Date(w.dateTimeISO) < cutoff) continue;
+      const dateKey = getLocalDateKey(new Date(w.dateTimeISO));
+      rows.push({
+        exportedAtISO,
+        rangeDays: d,
+        patientName,
+        patientBirthYear,
+        recordType: 'weight',
+        date: dateKey,
+        time: formatTimeHHmmPtBr(w.dateTimeISO),
+        weightKg: w.weightKg,
+        fasting: w.fasting ? 'S' : 'N',
+        medName: '',
+        doseMg: '',
+        site: '',
+        symptoms: '',
+        waistCm: '',
+        hipCm: '',
+        armLCm: '',
+        armRCm: '',
+        thighCm: '',
+        calfCm: '',
+        chestCm: '',
+        neckCm: '',
+        notes: w.notes || ''
+      });
+    }
+
+    for (const i of injections) {
+      if (new Date(i.dateTimeISO) < cutoff) continue;
+      const dateKey = getLocalDateKey(new Date(i.dateTimeISO));
+      rows.push({
+        exportedAtISO,
+        rangeDays: d,
+        patientName,
+        patientBirthYear,
+        recordType: 'injection',
+        date: dateKey,
+        time: formatTimeHHmmPtBr(i.dateTimeISO),
+        weightKg: '',
+        fasting: '',
+        medName: i.medName || '',
+        doseMg: i.doseMg,
+        site: i.site || '',
+        symptoms: formatSymptomCompact(i.symptoms),
+        waistCm: '',
+        hipCm: '',
+        armLCm: '',
+        armRCm: '',
+        thighCm: '',
+        calfCm: '',
+        chestCm: '',
+        neckCm: '',
+        notes: i.notes || ''
+      });
+    }
+
+    for (const m of measures) {
+      const dt = new Date(`${m.dateISO}T00:00:00`);
+      if (dt < cutoff) continue;
+      rows.push({
+        exportedAtISO,
+        rangeDays: d,
+        patientName,
+        patientBirthYear,
+        recordType: 'measures',
+        date: m.dateISO,
+        time: '',
+        weightKg: '',
+        fasting: '',
+        medName: '',
+        doseMg: '',
+        site: '',
+        symptoms: '',
+        waistCm: m.waistCm ?? '',
+        hipCm: m.hipCm ?? '',
+        armLCm: m.armLCm ?? '',
+        armRCm: m.armRCm ?? '',
+        thighCm: m.thighCm ?? '',
+        calfCm: m.calfCm ?? '',
+        chestCm: m.chestCm ?? '',
+        neckCm: m.neckCm ?? '',
+        notes: m.notes || ''
+      });
+    }
+
+    rows.sort((a, b) => {
+      const ak = `${a.date}T${a.time || '00:00'}`;
+      const bk = `${b.date}T${b.time || '00:00'}`;
+      if (ak === bk) return String(a.recordType).localeCompare(String(b.recordType));
+      return ak < bk ? -1 : 1;
+    });
+
+    const headers = [
+      'exportedAtISO',
+      'rangeDays',
+      'patientName',
+      'patientBirthYear',
+      'recordType',
+      'date',
+      'time',
+      'weightKg',
+      'fasting',
+      'medName',
+      'doseMg',
+      'site',
+      'symptoms',
+      'waistCm',
+      'hipCm',
+      'armLCm',
+      'armRCm',
+      'thighCm',
+      'calfCm',
+      'chestCm',
+      'neckCm',
+      'notes'
+    ];
+
+    downloadText(`pesomed-clinical-${d}d-${todayStamp()}.csv`, toCsv(rows, headers), 'text/csv;charset=utf-8');
+    showToast('CSV clínico gerado (1 arquivo).');
   }
 
   async function downloadBackup() {
@@ -3438,7 +3590,8 @@
         break;
       }
       case 'buildInsightsSummary': {
-        const text = await buildInsightsSummaryText(30);
+        const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
+        const text = await buildInsightsSummaryText(d);
         if (insightsSummaryTextEl) insightsSummaryTextEl.value = text;
         showToast('Resumo montado.');
         break;
@@ -3466,6 +3619,9 @@
         break;
       case 'exportCsv':
         await exportCsv();
+        break;
+      case 'exportClinicalCsv':
+        await exportClinicalCsv();
         break;
       case 'downloadBackup':
         await downloadBackup();
@@ -3601,6 +3757,10 @@
     });
     reportPatientNameEl?.addEventListener('input', () => {
       reportPatientNameEl.dataset.userTouched = 'true';
+    });
+
+    insightsRangeEl?.addEventListener('change', () => {
+      insightsRangeEl.dataset.userTouched = 'true';
     });
 
     // Gráfico: range + tooltip
