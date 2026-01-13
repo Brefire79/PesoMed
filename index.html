@@ -129,13 +129,23 @@
         <article class="card" aria-label="Resumo semanal">
           <div class="card__head">
             <h2 class="card__title">Resumo semanal (WhatsApp)</h2>
-            <button class="btn btn--secondary" type="button" data-action="generateWeeklySummary">Gerar resumo semanal</button>
           </div>
           <p class="muted">Texto pronto para copiar/compartilhar. Sem orientação médica.</p>
+          <div class="row">
+            <div class="field" style="flex: 1; min-width: 180px; margin: 0;">
+              <label class="label" for="weeklySummaryWeek">Semana</label>
+              <select id="weeklySummaryWeek" class="input" aria-label="Selecionar semana do resumo">
+                <option value="0" selected>Semana atual</option>
+                <option value="1">Semana passada</option>
+              </select>
+            </div>
+            <button class="btn btn--secondary" type="button" data-action="generateWeeklySummary">Gerar resumo semanal</button>
+          </div>
           <textarea id="weeklySummaryText" class="input" rows="10" readonly placeholder="Toque em “Gerar resumo semanal”."></textarea>
           <div class="row">
             <button class="btn" type="button" data-action="copyWeeklySummary">Copiar</button>
             <button class="btn btn--secondary" type="button" data-action="shareWeeklySummary">Compartilhar</button>
+            <button class="btn btn--secondary" type="button" data-action="openWeeklySummaryWhatsapp">Abrir WhatsApp</button>
           </div>
         </article>
 

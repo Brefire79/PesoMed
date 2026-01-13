@@ -343,8 +343,10 @@
     return `${n.toFixed(1).replace('.', ',')} kg`;
   }
 
-  function buildWeeklySummaryText(cache, settings) {
-    const start = startOfWeekMonday(now());
+  function buildWeeklySummaryText(cache, settings, weekOffset = 0) {
+    const offset = Math.max(0, Math.floor(Number(weekOffset) || 0));
+    const base = startOfWeekMonday(now());
+    const start = addDays(base, -7 * offset);
     const end = endOfWeekSunday(start);
 
     const weightsAsc = [...cache.weights]
@@ -427,7 +429,8 @@
   async function generateWeeklySummary() {
     const cache = await buildChecklistCache();
     const settings = await getSettings();
-    const text = buildWeeklySummaryText(cache, settings);
+    const weekOffset = weeklySummaryWeekEl?.value ? Number(weeklySummaryWeekEl.value) : 0;
+    const text = buildWeeklySummaryText(cache, settings, weekOffset);
     if (weeklySummaryTextEl) weeklySummaryTextEl.value = text;
     return text;
   }
@@ -1142,6 +1145,7 @@
   const weightChartRange90Btn = document.getElementById('weightChartRange90');
 
   const weeklySummaryTextEl = document.getElementById('weeklySummaryText');
+  const weeklySummaryWeekEl = document.getElementById('weeklySummaryWeek');
   const localInsightsList = document.getElementById('localInsightsList');
 
   const reportRangeEl = document.getElementById('reportRange');
@@ -1319,14 +1323,25 @@
     }
   }
 
-  async function shareText(title, text) {
+  function whatsappShareUrl(text) {
+    const msg = String(text || '');
+    return `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  }
+
+  async function shareText(titleOrObj, textMaybe) {
+    let title = titleOrObj;
+    let text = textMaybe;
+    if (titleOrObj && typeof titleOrObj === 'object') {
+      title = titleOrObj.title;
+      text = titleOrObj.text;
+    }
     if (!text) return;
     if (typeof navigator.share !== 'function') {
       await copyTextToClipboard(text);
       return;
     }
     try {
-      await navigator.share({ title, text });
+      await navigator.share({ title: String(title || ''), text: String(text || '') });
     } catch {
       // cancelado
     }
@@ -2344,20 +2359,12 @@
   // Resumo p/ IA (texto) - V3
   // -----------------------------
 
-  async function buildInsightsSummaryText(days = 30) {
-    const settings = await getSettings();
-    const d = Math.max(1, Math.floor(Number(days) || 30));
-    const [injections, weights, measures] = await Promise.all([
-      getAll(STORE_INJECTIONS),
-      getAll(STORE_WEIGHTS),
-      getAll(STORE_MEASURES)
-    ]);
-
-    const summary = buildLastNDaysSummary(d, { injections, weights, measures });
+  function formatInsightsSummaryTextFromSummary(summary, settings) {
+    const d = Math.max(1, Math.floor(Number(summary?.periodDays) || 30));
 
     const lines = [];
     lines.push(`Resumo (últimos ${d} dias) — PesoMed`);
-    if (settings.patientName) {
+    if (settings?.patientName) {
       lines.push(`Paciente: ${settings.patientName}${settings.patientBirthYear ? ` (nasc. ${settings.patientBirthYear})` : ''}`);
     }
     lines.push('');
@@ -2389,6 +2396,27 @@
     lines.push('');
     lines.push('Observações: sem orientação médica; apenas organização de dados.');
     return lines.join('\n');
+  }
+
+  // Requisito: função buildInsightsSummary(days=30)
+  async function buildInsightsSummary(days = 30) {
+    const settings = await getSettings();
+    const d = Math.max(1, Math.floor(Number(days) || 30));
+    const [injections, weights, measures] = await Promise.all([
+      getAll(STORE_INJECTIONS),
+      getAll(STORE_WEIGHTS),
+      getAll(STORE_MEASURES)
+    ]);
+
+    const summary = buildLastNDaysSummary(d, { injections, weights, measures });
+    const prompt = createAiPrompt(summary);
+    const text = formatInsightsSummaryTextFromSummary(summary, settings);
+    return { days: d, settings, summary, prompt, text };
+  }
+
+  async function buildInsightsSummaryText(days = 30) {
+    const built = await buildInsightsSummary(days);
+    return built.text;
   }
 
   // -----------------------------
@@ -2901,14 +2929,10 @@
     insightsStatus.textContent = `Preparando resumo dos últimos ${d} dias…`;
     clearChildren(insightsCards);
 
-    const [injections, weights, measures] = await Promise.all([
-      getAll(STORE_INJECTIONS),
-      getAll(STORE_WEIGHTS),
-      getAll(STORE_MEASURES)
-    ]);
-
-    const summary = buildLastNDaysSummary(d, { injections, weights, measures });
-    const prompt = createAiPrompt(summary);
+    const built = await buildInsightsSummary(d);
+    if (insightsSummaryTextEl) insightsSummaryTextEl.value = built.text;
+    const summary = built.summary;
+    const prompt = built.prompt;
 
     insightsStatus.textContent = 'Chamando /api/analyze (fallback local se indisponível)…';
 
@@ -3581,7 +3605,6 @@
       case 'copyWeeklySummary': {
         const text = weeklySummaryTextEl?.value || '';
         await copyTextToClipboard(text);
-        showToast('Copiado.');
         break;
       }
       case 'shareWeeklySummary': {
@@ -3589,17 +3612,26 @@
         await shareText({ title: 'Resumo semanal (PesoMed)', text });
         break;
       }
+      case 'openWeeklySummaryWhatsapp': {
+        let text = weeklySummaryTextEl?.value || '';
+        if (!text) text = await generateWeeklySummary();
+        if (!text) {
+          showToast('Sem dados suficientes para resumo.');
+          break;
+        }
+        window.open(whatsappShareUrl(text), '_blank', 'noopener');
+        break;
+      }
       case 'buildInsightsSummary': {
         const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
-        const text = await buildInsightsSummaryText(d);
-        if (insightsSummaryTextEl) insightsSummaryTextEl.value = text;
+        const built = await buildInsightsSummary(d);
+        if (insightsSummaryTextEl) insightsSummaryTextEl.value = built.text;
         showToast('Resumo montado.');
         break;
       }
       case 'copyInsightsSummary': {
         const text = insightsSummaryTextEl?.value || '';
         await copyTextToClipboard(text);
-        showToast('Copiado.');
         break;
       }
       case 'shareInsightsSummary': {
