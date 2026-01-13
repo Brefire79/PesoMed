@@ -1853,7 +1853,150 @@
     };
   }
 
-  function buildClinicalReportInnerHtml({ rangeDays, patientName, patientBirthYear, data }) {
+  function uniqueDateKeysFromDateTimeISO(items) {
+    const keys = new Set();
+    for (const it of items) {
+      const d = new Date(it.dateTimeISO);
+      keys.add(getLocalDateKey(d));
+    }
+    return keys;
+  }
+
+  function computeScheduleAdherenceForRange(rangeDays, settings, data) {
+    const s = settings || DEFAULTS;
+    const end = startOfDay(now());
+    const start = addDays(end, -(Math.max(1, rangeDays) - 1));
+    const weighDows = new Set(s.weighDaysOfWeek || DEFAULTS.weighDaysOfWeek);
+    const injDow = clampNumber(s.injectionDayOfWeek ?? DEFAULTS.injectionDayOfWeek, 0, 6);
+
+    const weightKeys = uniqueDateKeysFromDateTimeISO(data.weights);
+    const injKeys = uniqueDateKeysFromDateTimeISO(data.injections);
+
+    let expectedWeights = 0;
+    let doneWeights = 0;
+    let expectedInj = 0;
+    let doneInj = 0;
+
+    for (let i = 0; i < rangeDays; i++) {
+      const d = addDays(start, i);
+      const key = getLocalDateKey(d);
+      if (weighDows.has(d.getDay())) {
+        expectedWeights += 1;
+        if (weightKeys.has(key)) doneWeights += 1;
+      }
+      if (d.getDay() === injDow) {
+        expectedInj += 1;
+        if (injKeys.has(key)) doneInj += 1;
+      }
+    }
+
+    // Mesmo critério do dashboard: pesagem=1 ponto, aplicação=2 pontos.
+    const expectedPoints = expectedWeights + (expectedInj * 2);
+    const donePoints = doneWeights + (doneInj * 2);
+    const pct = expectedPoints ? Math.round((donePoints / expectedPoints) * 100) : 0;
+
+    return { expectedWeights, doneWeights, expectedInj, doneInj, expectedPoints, donePoints, pct };
+  }
+
+  function computeDoseHistory(injectionsAsc) {
+    const items = [];
+    if (!injectionsAsc.length) return items;
+    let lastDose = null;
+    for (const inj of injectionsAsc) {
+      const dose = Number(inj.doseMg);
+      if (!Number.isFinite(dose)) continue;
+      if (lastDose === null) {
+        lastDose = dose;
+        items.push({ dateTimeISO: inj.dateTimeISO, doseMg: dose });
+        continue;
+      }
+      if (Math.abs(dose - lastDose) >= 0.0001) {
+        lastDose = dose;
+        items.push({ dateTimeISO: inj.dateTimeISO, doseMg: dose });
+      }
+    }
+    // Se não houve mudança, mostramos só a última como “dose atual registrada”.
+    if (items.length === 1) {
+      const last = injectionsAsc[injectionsAsc.length - 1];
+      const dose = Number(last.doseMg);
+      if (Number.isFinite(dose)) return [{ dateTimeISO: last.dateTimeISO, doseMg: dose }];
+    }
+    return items;
+  }
+
+  function computeSymptomsAggregated(injections) {
+    const keys = Object.keys(SYMPTOMS_LABELS);
+    if (!injections.length) {
+      return { means: {}, peaks: {} };
+    }
+    const sums = {};
+    const peaks = {};
+    for (const k of keys) {
+      sums[k] = 0;
+      peaks[k] = 0;
+    }
+    for (const inj of injections) {
+      for (const k of keys) {
+        const v = clampNumber(inj.symptoms?.[k] ?? 0, 0, 10);
+        sums[k] += v;
+        if (v > peaks[k]) peaks[k] = v;
+      }
+    }
+    const means = {};
+    for (const k of keys) {
+      means[k] = sums[k] / injections.length;
+    }
+    return { means, peaks };
+  }
+
+  function formatSymptomCompact(sym) {
+    if (!sym) return '—';
+    const parts = [];
+    for (const k of Object.keys(SYMPTOMS_LABELS)) {
+      const v = clampNumber(sym[k] ?? 0, 0, 10);
+      parts.push(`${SYMPTOMS_LABELS[k]} ${v}`);
+    }
+    return parts.join(' • ');
+  }
+
+  function collectPatientNotes(rangeDays, data, maxItems = 10) {
+    const cutoff = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
+    const notes = [];
+
+    for (const w of data.weights) {
+      if (!w?.notes) continue;
+      if (new Date(w.dateTimeISO) < cutoff) continue;
+      notes.push({
+        dateTimeISO: w.dateTimeISO,
+        kind: 'Peso',
+        text: String(w.notes)
+      });
+    }
+    for (const i of data.injections) {
+      if (!i?.notes) continue;
+      if (new Date(i.dateTimeISO) < cutoff) continue;
+      notes.push({
+        dateTimeISO: i.dateTimeISO,
+        kind: 'Aplicação',
+        text: String(i.notes)
+      });
+    }
+    for (const m of data.measures) {
+      if (!m?.notes) continue;
+      const dt = new Date(`${m.dateISO}T00:00:00`);
+      if (dt < cutoff) continue;
+      notes.push({
+        dateTimeISO: dt.toISOString(),
+        kind: 'Medidas',
+        text: String(m.notes)
+      });
+    }
+
+    notes.sort(sortByDateTimeDesc);
+    return notes.slice(0, maxItems);
+  }
+
+  function buildClinicalReportInnerHtml({ rangeDays, patientName, patientBirthYear, data, settings = null }) {
     const s = buildSummaryForDays(rangeDays, data);
     const generatedAt = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -1861,61 +2004,237 @@
     const lastW = s.weights[0] || null;
     const lastM = s.measures[0] || null;
 
+    const settingsResolved = settings || DEFAULTS;
+    const injDow = clampNumber(settingsResolved.injectionDayOfWeek ?? DEFAULTS.injectionDayOfWeek, 0, 6);
+    const injTime = settingsResolved.injectionTime || DEFAULTS.injectionTime;
+
     const injRate = s.injReg.onTimeRate === null ? '—' : `${Math.round(s.injReg.onTimeRate * 100)}%`;
     const wtDelta = Number.isFinite(s.wtTrend.deltaKg) ? `${s.wtTrend.deltaKg >= 0 ? '+' : ''}${s.wtTrend.deltaKg.toFixed(1).replace('.', ',')} kg` : '—';
     const perWeek = Number.isFinite(s.wtTrend.perWeekKg) ? `${s.wtTrend.perWeekKg >= 0 ? '+' : ''}${s.wtTrend.perWeekKg.toFixed(2).replace('.', ',')} kg/sem` : '—';
-
-    const symAvg = Object.keys(s.sym.averages || {}).map((k) => `${SYMPTOMS_LABELS[k]} ${(s.sym.averages[k] ?? 0).toFixed(1).replace('.', ',')}`);
-    const topSym = (s.sym.top || []).map((x) => `${x.label} ${x.avg.toFixed(1).replace('.', ',')}`).join(' • ');
 
     const deltaLines = [];
     for (const [k, v] of Object.entries(s.msDelta.deltas || {})) {
       deltaLines.push(`${k}: ${v >= 0 ? '+' : ''}${v.toFixed(1).replace('.', ',')} cm`);
     }
 
+    const symAgg = computeSymptomsAggregated(s.injections);
+    const notes = collectPatientNotes(rangeDays, data, 10);
+
+    const weightsAsc = [...s.weights].sort((a, b) => new Date(a.dateTimeISO) - new Date(b.dateTimeISO));
+    const injectionsAsc = [...s.injections].sort((a, b) => new Date(a.dateTimeISO) - new Date(b.dateTimeISO));
+    const doseHistory = computeDoseHistory(injectionsAsc);
+    const lastDose = injectionsAsc.length ? injectionsAsc[injectionsAsc.length - 1].doseMg : null;
+
+    const adherence = computeScheduleAdherenceForRange(rangeDays, settingsResolved, { weights: s.weights, injections: s.injections });
+
+    const wStart = s.wtTrend.start?.weightKg ?? null;
+    const wEnd = s.wtTrend.end?.weightKg ?? null;
+    const wStartText = wStart === null ? '—' : `${wStart.toFixed(1).replace('.', ',')} kg`;
+    const wEndText = wEnd === null ? '—' : `${wEnd.toFixed(1).replace('.', ',')} kg`;
+
+    const doseText = Number.isFinite(Number(lastDose)) ? formatDoseMg(lastDose) : '—';
+    const doseHistoryText = doseHistory.length
+      ? doseHistory.map((x) => `${formatDateTimePtBr(x.dateTimeISO)} → ${formatDoseMg(x.doseMg)}`).join('<br/>')
+      : '—';
+
+    const measuresAsc = [...s.measures].sort((a, b) => a.dateISO.localeCompare(b.dateISO));
+    const mStart = measuresAsc[0] || null;
+    const mEnd = measuresAsc[measuresAsc.length - 1] || null;
+
+    const measuresDeltaText = deltaLines.length ? escapeHtml(deltaLines.join(' • ')) : '—';
+
+    const weightsRows = weightsAsc.map((w) => `
+      <tr>
+        <td>${escapeHtml(formatDateTimePtBr(w.dateTimeISO).split(' ')[0])}</td>
+        <td>${escapeHtml(formatDateTimePtBr(w.dateTimeISO).split(' ')[1] || '')}</td>
+        <td class="cr-num">${escapeHtml(String(Number(w.weightKg).toFixed(1).replace('.', ',')))}</td>
+        <td>${w.fasting ? 'Sim' : 'Não'}</td>
+        <td>${escapeHtml(w.notes || '')}</td>
+      </tr>
+    `.trim()).join('');
+
+    const injectionsRows = injectionsAsc.map((i) => `
+      <tr>
+        <td>${escapeHtml(formatDateTimePtBr(i.dateTimeISO).split(' ')[0])}</td>
+        <td>${escapeHtml(formatDateTimePtBr(i.dateTimeISO).split(' ')[1] || '')}</td>
+        <td class="cr-num">${escapeHtml(String(Number(i.doseMg).toFixed(1).replace('.', ',')))}</td>
+        <td>${escapeHtml(siteLabel(i.site))}</td>
+        <td>${escapeHtml(formatSymptomCompact(i.symptoms))}</td>
+        <td>${escapeHtml(i.notes || '')}</td>
+      </tr>
+    `.trim()).join('');
+
+    const measuresRows = measuresAsc.map((m) => `
+      <tr>
+        <td>${escapeHtml(formatDatePtBr(m.dateISO))}</td>
+        <td class="cr-num">${m.waistCm ?? ''}</td>
+        <td class="cr-num">${m.hipCm ?? ''}</td>
+        <td class="cr-num">${m.armLCm ?? ''}</td>
+        <td class="cr-num">${m.armRCm ?? ''}</td>
+        <td class="cr-num">${m.thighCm ?? ''}</td>
+        <td class="cr-num">${m.calfCm ?? ''}</td>
+        <td class="cr-num">${m.chestCm ?? ''}</td>
+        <td class="cr-num">${m.neckCm ?? ''}</td>
+        <td>${escapeHtml(m.notes || '')}</td>
+      </tr>
+    `.trim()).join('');
+
+    const symRows = Object.keys(SYMPTOMS_LABELS).map((k) => {
+      const mean = symAgg.means?.[k];
+      const peak = symAgg.peaks?.[k];
+      return `
+        <tr>
+          <td>${escapeHtml(SYMPTOMS_LABELS[k])}</td>
+          <td class="cr-num">${Number.isFinite(mean) ? mean.toFixed(1).replace('.', ',') : '—'}</td>
+          <td class="cr-num">${Number.isFinite(peak) ? String(peak) : '—'}</td>
+        </tr>
+      `.trim();
+    }).join('');
+
+    const notesHtml = notes.length
+      ? `<ul class="cr-notes">${notes.map((n) => `<li><strong>${escapeHtml(n.kind)}:</strong> ${escapeHtml(formatDateTimePtBr(n.dateTimeISO))} — ${escapeHtml(n.text)}</li>`).join('')}</ul>`
+      : '<div class="cr-muted">—</div>';
+
     return `
-      <section>
-        <h2 style="margin:0 0 6px 0; font-size:18px;">Relatório de acompanhamento (informativo)</h2>
-        <div style="font-size:12px; color:#334;">Gerado em ${escapeHtml(generatedAt)} • Período: últimos ${rangeDays} dias</div>
-        <div style="margin-top:8px; font-size:13px;">
-          <strong>Paciente:</strong> ${escapeHtml(patientName || '—')}
-          ${patientBirthYear ? ` <span style="color:#556;">(nasc. ${escapeHtml(patientBirthYear)})</span>` : ''}
-        </div>
-        <div style="margin-top:8px; font-size:12px; color:#556;">Obs.: este relatório não é diagnóstico nem orientação médica. Serve para organizar registros.</div>
-      </section>
+      <div class="clinical-report">
+        <header class="cr-header">
+          <div>
+            <div class="cr-title">Relatório de Monitoramento — Retatrutida</div>
+            <div class="cr-sub">Gerado em ${escapeHtml(generatedAt)} • Período selecionado: ${rangeDays} dias</div>
+          </div>
+          <div class="cr-patient">
+            <div><strong>Paciente:</strong> ${escapeHtml(patientName || '—')}</div>
+            <div class="cr-muted">${patientBirthYear ? `Nasc.: ${escapeHtml(patientBirthYear)}` : '—'}</div>
+          </div>
+        </header>
 
-      <hr style="border:none; border-top:1px solid rgba(0,0,0,.12); margin:14px 0;" />
+        <section class="cr-section">
+          <div class="cr-section-title">Regime (informativo)</div>
+          <div class="cr-kv">
+            <div><span class="cr-k">Medicação:</span> <span class="cr-v">Retatrutida</span></div>
+            <div><span class="cr-k">Esquema:</span> <span class="cr-v">semanal (${escapeHtml(formatDowPtBr(injDow))} ${escapeHtml(injTime)})</span></div>
+            <div><span class="cr-k">Dose registrada (última):</span> <span class="cr-v">${escapeHtml(doseText)}</span></div>
+          </div>
+          <div class="cr-muted" style="margin-top:6px;">Histórico de dose (mudanças no período):<br/>${doseHistoryText}</div>
+        </section>
 
-      <section style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-        <div style="border:1px solid rgba(0,0,0,.12); border-radius:10px; padding:10px;">
-          <h3 style="margin:0 0 8px 0; font-size:14px;">Aplicações</h3>
-          <div style="font-size:13px;">Registros: <strong>${s.injections.length}</strong></div>
-          <div style="font-size:13px;">Regularidade (6–8 dias): <strong>${escapeHtml(injRate)}</strong></div>
-          <div style="font-size:13px;">Média entre aplicações: <strong>${s.injReg.meanDays ? s.injReg.meanDays.toFixed(1).replace('.', ',') : '—'}</strong> dia(s)</div>
-          <div style="margin-top:6px; font-size:12px; color:#556;">Última: ${lastInj ? `${escapeHtml(formatDateTimePtBr(lastInj.dateTimeISO))} • ${escapeHtml(lastInj.medName)} • ${escapeHtml(formatDoseMg(lastInj.doseMg))} • ${escapeHtml(siteLabel(lastInj.site))}` : '—'}</div>
-        </div>
+        <section class="cr-section">
+          <div class="cr-section-title">Resumo executivo</div>
+          <div class="cr-grid">
+            <div class="cr-box">
+              <div class="cr-box-title">Peso</div>
+              <div><span class="cr-k">Início → fim:</span> <span class="cr-v">${escapeHtml(wStartText)} → ${escapeHtml(wEndText)}</span></div>
+              <div><span class="cr-k">Variação:</span> <span class="cr-v">${escapeHtml(wtDelta)}</span></div>
+              <div><span class="cr-k">Média semanal:</span> <span class="cr-v">${escapeHtml(perWeek)}</span></div>
+            </div>
+            <div class="cr-box">
+              <div class="cr-box-title">Consistência (agenda)</div>
+              <div><span class="cr-k">Consistência:</span> <span class="cr-v">${adherence.pct}%</span></div>
+              <div><span class="cr-k">Pesagens:</span> <span class="cr-v">${adherence.doneWeights}/${adherence.expectedWeights}</span></div>
+              <div><span class="cr-k">Aplicações:</span> <span class="cr-v">${adherence.doneInj}/${adherence.expectedInj}</span></div>
+            </div>
+            <div class="cr-box">
+              <div class="cr-box-title">Aplicações</div>
+              <div><span class="cr-k">Registros:</span> <span class="cr-v">${s.injections.length}</span></div>
+              <div><span class="cr-k">Regularidade (6–8 dias):</span> <span class="cr-v">${escapeHtml(injRate)}</span></div>
+              <div class="cr-muted">Última: ${lastInj ? `${escapeHtml(formatDateTimePtBr(lastInj.dateTimeISO))} • ${escapeHtml(formatDoseMg(lastInj.doseMg))} • ${escapeHtml(siteLabel(lastInj.site))}` : '—'}</div>
+            </div>
+            <div class="cr-box">
+              <div class="cr-box-title">Medidas</div>
+              <div><span class="cr-k">Registros:</span> <span class="cr-v">${s.measures.length}</span></div>
+              <div><span class="cr-k">Delta período:</span> <span class="cr-v">${measuresDeltaText}</span></div>
+              <div class="cr-muted">Último: ${lastM ? escapeHtml(formatDatePtBr(lastM.dateISO)) : '—'}</div>
+            </div>
+          </div>
+        </section>
 
-        <div style="border:1px solid rgba(0,0,0,.12); border-radius:10px; padding:10px;">
-          <h3 style="margin:0 0 8px 0; font-size:14px;">Peso</h3>
-          <div style="font-size:13px;">Registros: <strong>${s.weights.length}</strong></div>
-          <div style="font-size:13px;">Variação no período: <strong>${escapeHtml(wtDelta)}</strong></div>
-          <div style="font-size:13px;">Tendência: <strong>${escapeHtml(perWeek)}</strong></div>
-          <div style="margin-top:6px; font-size:12px; color:#556;">Último: ${lastW ? `${escapeHtml(formatDateTimePtBr(lastW.dateTimeISO))} • ${escapeHtml(formatKg(lastW.weightKg))} • ${lastW.fasting ? 'jejum' : 'sem jejum'}` : '—'}</div>
-        </div>
-      </section>
+        <section class="cr-section">
+          <div class="cr-section-title">Tabela de Pesos</div>
+          <table class="cr-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Hora</th>
+                <th class="cr-num">Peso (kg)</th>
+                <th>Jejum</th>
+                <th>Observações</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${weightsRows || `<tr><td colspan="5" class="cr-muted">Sem pesos no período.</td></tr>`}
+            </tbody>
+          </table>
+        </section>
 
-      <section style="margin-top:12px; border:1px solid rgba(0,0,0,.12); border-radius:10px; padding:10px;">
-        <h3 style="margin:0 0 8px 0; font-size:14px;">Medidas</h3>
-        <div style="font-size:13px;">Registros: <strong>${s.measures.length}</strong></div>
-        <div style="margin-top:6px; font-size:12px; color:#334;">Delta (início → fim): ${deltaLines.length ? escapeHtml(deltaLines.join(' • ')) : '—'}</div>
-        <div style="margin-top:6px; font-size:12px; color:#556;">Último registro: ${lastM ? escapeHtml(lastM.dateISO) : '—'}</div>
-      </section>
+        <section class="cr-section">
+          <div class="cr-section-title">Tabela de Aplicações</div>
+          <table class="cr-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Hora</th>
+                <th class="cr-num">Dose (mg)</th>
+                <th>Local</th>
+                <th>Sintomas (0–10)</th>
+                <th>Observações</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${injectionsRows || `<tr><td colspan="6" class="cr-muted">Sem aplicações no período.</td></tr>`}
+            </tbody>
+          </table>
+        </section>
 
-      <section style="margin-top:12px; border:1px solid rgba(0,0,0,.12); border-radius:10px; padding:10px;">
-        <h3 style="margin:0 0 8px 0; font-size:14px;">Sintomas (0–10)</h3>
-        <div style="font-size:12px; color:#334;">Médias: ${symAvg.length ? escapeHtml(symAvg.join(' • ')) : '—'}</div>
-        <div style="margin-top:6px; font-size:12px; color:#556;">Top: ${topSym ? escapeHtml(topSym) : '—'}</div>
-      </section>
+        <section class="cr-section">
+          <div class="cr-section-title">Medidas</div>
+          <div class="cr-muted">Variação do período (início → fim): ${measuresDeltaText}</div>
+          <table class="cr-table" style="margin-top:8px;">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th class="cr-num">Cintura</th>
+                <th class="cr-num">Quadril</th>
+                <th class="cr-num">Braço E</th>
+                <th class="cr-num">Braço D</th>
+                <th class="cr-num">Coxa</th>
+                <th class="cr-num">Panturrilha</th>
+                <th class="cr-num">Peito</th>
+                <th class="cr-num">Pescoço</th>
+                <th>Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${measuresRows || `<tr><td colspan="10" class="cr-muted">Sem medidas no período.</td></tr>`}
+            </tbody>
+          </table>
+        </section>
+
+        <section class="cr-section">
+          <div class="cr-section-title">Sintomas agregados (0–10)</div>
+          <table class="cr-table cr-table--small">
+            <thead>
+              <tr>
+                <th>Sintoma</th>
+                <th class="cr-num">Média</th>
+                <th class="cr-num">Pico</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${symRows}
+            </tbody>
+          </table>
+        </section>
+
+        <section class="cr-section">
+          <div class="cr-section-title">Notas do paciente (últimos registros)</div>
+          ${notesHtml}
+        </section>
+
+        <footer class="cr-footer">
+          <div>Dados auto-relatados pelo paciente via aplicativo (offline-first).</div>
+          <div>Este relatório não substitui avaliação médica.</div>
+        </footer>
+      </div>
     `.trim();
   }
 
@@ -1936,7 +2255,8 @@
       rangeDays,
       patientName,
       patientBirthYear,
-      data: { injections, weights, measures }
+      data: { injections, weights, measures },
+      settings
     });
   }
 
@@ -1956,7 +2276,8 @@
       rangeDays,
       patientName,
       patientBirthYear,
-      data: { injections, weights, measures }
+      data: { injections, weights, measures },
+      settings
     });
 
     const win = window.open('', '_blank');
@@ -1976,10 +2297,36 @@
     :root { color-scheme: light; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
     .note { background: #f5f7fb; border: 1px solid rgba(0,0,0,.10); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+
+    .clinical-report{ max-width: 960px; margin: 0 auto; }
+    .cr-header{ display:flex; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 2px solid rgba(0,0,0,.10); }
+    .cr-title{ font-size: 18px; font-weight: 900; letter-spacing: -0.01em; }
+    .cr-sub{ font-size: 12px; color: #334155; margin-top: 4px; }
+    .cr-patient{ text-align: right; font-size: 12px; color:#0f172a; }
+    .cr-muted{ color: #475569; font-size: 12px; }
+    .cr-section{ margin-top: 14px; }
+    .cr-section-title{ font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: .03em; color:#0f172a; margin-bottom: 8px; }
+    .cr-kv{ display:grid; grid-template-columns: 1fr; gap: 4px; font-size: 12px; }
+    .cr-k{ color:#475569; font-weight: 800; }
+    .cr-v{ color:#0f172a; font-weight: 700; }
+    .cr-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .cr-box{ border: 1px solid rgba(0,0,0,.12); border-radius: 10px; padding: 10px; }
+    .cr-box-title{ font-weight: 900; font-size: 13px; margin-bottom: 6px; }
+    .cr-table{ width: 100%; border-collapse: collapse; font-size: 12px; }
+    .cr-table th, .cr-table td{ border: 1px solid rgba(0,0,0,.12); padding: 6px 8px; vertical-align: top; }
+    .cr-table th{ background: #f8fafc; text-align: left; }
+    .cr-table--small td, .cr-table--small th{ padding: 6px 8px; }
+    .cr-num{ text-align: right; white-space: nowrap; }
+    .cr-notes{ margin: 6px 0 0 18px; padding: 0; font-size: 12px; }
+    .cr-notes li{ margin: 4px 0; }
+    .cr-footer{ margin-top: 18px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,.12); font-size: 11px; color:#475569; }
+
     @media print {
-      @page { size: A4; margin: 12mm; }
+      @page { size: A4; margin: 14mm; }
       .note { display:none; }
       body { margin: 0; }
+      .cr-box, .cr-table, .cr-notes { break-inside: avoid; }
+      tr { break-inside: avoid; }
     }
   </style>
 </head>
