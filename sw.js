@@ -8,7 +8,7 @@
 */
 
 // Cache com nome estável: facilita atualizar sem precisar “reinstalar” o atalho.
-const CACHE_NAME = 'dosecheck-cache';
+const CACHE_NAME = 'dosecheck-cache-v3';
 
 // Atualize a lista se adicionar novos arquivos estáticos.
 const APP_SHELL = [
@@ -21,13 +21,17 @@ const APP_SHELL = [
   './icons/icon-512.svg',
   './icons/maskable-512.svg',
   './icons/screenshot-narrow.svg',
-  './icons/screenshot-wide.svg'
+  './icons/screenshot-wide.svg',
+  './icons/body-silhouette.svg'
 ];
 
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
   }
+  // Retorna false explicitamente para indicar que não há resposta assíncrona
+  return false;
 });
 
 self.addEventListener('install', (event) => {

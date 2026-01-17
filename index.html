@@ -93,8 +93,10 @@
             <button class="btn btn--secondary" id="btnQuickAddMeasuresDashboard" type="button" data-action="quickAddMeasures">+ Medir</button>
           </div>
         </article>
+      </div>
+    </section>
 
-        <article class="card" id="cardChecklistToday" aria-label="Checklist de hoje">
+    <section id="viewInjections" class="view" aria-labelledby="hInjections" hidden>
           <div class="card__head">
             <h2 class="card__title">Checklist de hoje</h2>
             <span id="checklistTodayBadge" class="chip" aria-live="polite">—</span>
@@ -242,7 +244,7 @@
 
       <div class="card">
         <p class="muted">
-          A IA aqui serve para identificar padrões e hábitos. Ela <strong>não</strong> deve prescrever dose, nem dar instruções médicas.
+          A IA aqui avalia seus dados reais (medicamento, aplicações, pesos e medidas) para identificar padrões e hábitos. <strong>Não inventa dados</strong> e não prescreve dose ou tratamento médico.
         </p>
         
         <div class="field">
@@ -254,30 +256,19 @@
           </select>
         </div>
         
-        <div class="row">
-          <button class="btn btn--summary" type="button" data-action="buildInsightsSummary">Montar resumo</button>
-          <button class="btn btn--secondary" type="button" data-action="runInsights">Analisar com IA</button>
-        </div>
-        <details>
-          <summary>O que será analisado (período selecionado)</summary>
-          <ul>
-            <li>Regularidade das aplicações</li>
-            <li>Tendência de peso (sem gráficos complexos)</li>
-            <li>Variação de medidas</li>
-            <li>Sintomas mais comuns</li>
-          </ul>
-        </details>
+        
         <div id="insightsStatus" class="status" aria-live="polite"></div>
         <div id="insightsSummaryMeta" class="banner banner--info" hidden aria-live="polite"></div>
+        
         <div class="field">
-          <label class="label" for="insightsSummaryText">Resumo montado</label>
-          <textarea id="insightsSummaryText" class="input" rows="10" readonly placeholder="Toque em “Montar resumo”."></textarea>
-          <div class="hint">Copie para enviar ao seu médico ou toque em “Analisar com IA” para insights automáticos.</div>
+          <label class="label" for="insightsSummaryText">Análise dos seus dados</label>
+          <textarea id="insightsSummaryText" class="input" rows="15" readonly placeholder="Carregando análise automática..."></textarea>
         </div>
+        
         <div class="row">
-          <button class="btn" type="button" data-action="copyInsightsSummary">Copiar</button>
-          <button class="btn btn--secondary" type="button" data-action="shareInsightsSummary">Enviar</button>
+          <button class="btn" type="button" data-action="shareInsightsSummaryWhatsapp">📱 Enviar para WhatsApp</button>
         </div>
+        
         <div id="insightsCards" class="cards"></div>
       </div>
     </section>
@@ -656,9 +647,21 @@
           <input id="mDate" class="input" type="date" required />
         </div>
 
-        <fieldset class="fieldset">
+        <fieldset class="fieldset fieldset--silhouette">
           <legend>Medidas principais</legend>
+          <div class="silhouette-bg" aria-hidden="true"></div>
+          <div class="measure-markers" aria-hidden="true">
+            <span class="measure-marker marker--neck">Pescoço</span>
+            <span class="measure-marker marker--waist">Cintura</span>
+            <span class="measure-marker marker--hip">Quadril</span>
+          </div>
           <div class="grid grid--2">
+            <div class="field">
+              <label class="label" for="mNeck">Pescoço • cm</label>
+              <input id="mNeck" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 39,5" />
+              <div class="hint">Referência: fita reta, logo abaixo do pomo de Adão.</div>
+            </div>
+
             <div class="field">
               <label class="label" for="mWaist">Cintura (altura do umbigo) • cm</label>
               <input id="mWaist" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 95,5" />
@@ -669,12 +672,6 @@
               <label class="label" for="mHip">Quadril (referência) • cm</label>
               <input id="mHip" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 102,0" />
               <div class="hint">Referência: maior circunferência do bumbum, pés juntos.</div>
-            </div>
-
-            <div class="field">
-              <label class="label" for="mNeck">Pescoço • cm</label>
-              <input id="mNeck" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 39,5" />
-              <div class="hint">Referência: fita reta, logo abaixo do pomo de Adão.</div>
             </div>
           </div>
         </fieldset>

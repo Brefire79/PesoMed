@@ -475,6 +475,48 @@ textarea.input{ resize: vertical; }
 }
 .dialog__body{ padding: 12px; }
 
+/* Guia visual de medidas: silhueta translúcida ao fundo */
+.fieldset--silhouette{ position: relative; overflow: hidden; }
+.fieldset--silhouette .silhouette-bg{
+  position: absolute;
+  inset: 0;
+  background: url('./icons/body-silhouette.svg') center/280px auto no-repeat;
+  opacity: .18;
+  pointer-events: none;
+  filter: saturate(0.9);
+}
+
+/* Marcadores de orientação sobre a silhueta */
+.fieldset--silhouette .measure-markers{ position:absolute; inset:0; pointer-events:none; }
+.measure-marker{
+  position:absolute;
+  left:50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(11,27,43,.82);
+  border: 1px solid rgba(255,255,255,.14);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 11px;
+  box-shadow: var(--shadow);
+}
+.marker--neck{ top: 18%; }
+.marker--waist{ top: 55%; }
+.marker--hip{ top: 74%; }
+
+@media (min-width: 820px){
+  .fieldset--silhouette .silhouette-bg{ background-size: 340px auto; }
+}
+
+@media (max-width: 420px){
+  .fieldset--silhouette .silhouette-bg{ background-size: 220px auto; }
+  .measure-marker{ font-size: 10px; padding: 5px 8px; }
+  .marker--neck{ top: 20%; }
+  .marker--waist{ top: 58%; }
+  .marker--hip{ top: 78%; }
+}
+
 .toast{
   position: fixed;
   left: 50%;

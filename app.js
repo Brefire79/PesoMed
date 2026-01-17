@@ -18,14 +18,18 @@
   // Constantes e utilitários
   // -----------------------------
 
+  // Versão do app
+  const APP_VERSION = '1.5.1';
+
   // Mantido como 'pesomed-db' para preservar dados existentes após o rename.
   const DB_NAME = 'pesomed-db';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
 
   const STORE_INJECTIONS = 'injections';
   const STORE_WEIGHTS = 'weights';
   const STORE_MEASURES = 'measures';
   const STORE_SETTINGS = 'settings';
+  const STORE_AUTO_BACKUPS = 'autoBackups';
 
   const SETTINGS_KEY = 'app';
 
@@ -858,6 +862,10 @@
         if (!db.objectStoreNames.contains(STORE_SETTINGS)) {
           db.createObjectStore(STORE_SETTINGS, { keyPath: 'key' });
         }
+        if (!db.objectStoreNames.contains(STORE_AUTO_BACKUPS)) {
+          const s = db.createObjectStore(STORE_AUTO_BACKUPS, { keyPath: 'id' });
+          s.createIndex('timestamp', 'timestamp', { unique: false });
+        }
       };
 
       req.onsuccess = () => resolve(req.result);
@@ -1347,6 +1355,7 @@
     const map = ATTENTION_MAP[att.kind];
     if (!map) return;
 
+    // Tenta destacar o elemento específico da rota atual
     const selector = map.selectorsByRoute?.[route];
     if (selector) {
       const el = document.querySelector(selector);
@@ -1354,8 +1363,10 @@
         addAttentionRing(el);
         return;
       }
+      // Se seletor existe mas elemento não foi encontrado, continua para fallback da aba
     }
 
+    // Fallback: destaca a aba correspondente
     const tabEl = map.tabRoute ? tabs[map.tabRoute] : null;
     if (tabEl instanceof HTMLElement) addAttentionRing(tabEl);
   }
@@ -1451,6 +1462,10 @@
   const settingsMedRefUrlEl = document.getElementById('settingsMedRefUrl');
   const settingsMedOfficialTextEl = document.getElementById('settingsMedOfficialText');
   const settingsInjectionDowEl = document.getElementById('settingsInjectionDow');
+  
+  const appVersionEl = document.getElementById('appVersion');
+  const lastBackupInfoEl = document.getElementById('lastBackupInfo');
+  const btnRestoreLastBackup = document.getElementById('btnRestoreLastBackup');
   const settingsInjectionTimeEl = document.getElementById('settingsInjectionTime');
   const settingsMeasureEveryEl = document.getElementById('settingsMeasureEvery');
   const settingsEnableArmSitesEl = document.getElementById('settingsEnableArmSites');
@@ -2146,64 +2161,11 @@
     delta14.textContent = `14d: ${formatDeltaKg(deltas.d14)}`;
     delta30.textContent = `30d: ${formatDeltaKg(deltas.d30)}`;
 
-    // Checklist & Alertas (agenda fixa) + V3 (reusando cache para evitar leituras duplicadas)
-    const cache = await buildChecklistCache();
-    await renderDashboardChecklist(cache, settings, n);
-
+    // Gráfico de evolução do peso no dashboard (default: range atual)
     try {
-      const weekOffset = weeklyConsistencyWeekEl?.value ? Number(weeklyConsistencyWeekEl.value) : 0;
-      await renderWeeklyConsistency(cache, settings, weekOffset);
-      await renderWeightChart(chartState.rangeDays, cache);
-      renderLocalInsights(buildLocalInsights(cache, settings));
+      await renderWeightChart(chartState.rangeDays || 30, { weights });
     } catch {
-      // Não trava o dashboard
-    }
-
-    // Timeline consolidada (últimos 12 eventos)
-    const timeline = [];
-    for (const i of injections.slice(0, 50)) {
-      timeline.push({
-        type: 'inj',
-        dateTimeISO: i.dateTimeISO,
-        title: `${i.medName} • ${formatDoseMg(i.doseMg)}`,
-        meta: `${formatDateTimePtBr(i.dateTimeISO)} • ${siteLabel(i.site)}`,
-        id: i.id
-      });
-    }
-    for (const w of weights.slice(0, 50)) {
-      timeline.push({
-        type: 'w',
-        dateTimeISO: w.dateTimeISO,
-        title: `Peso • ${formatKg(w.weightKg)}`,
-        meta: `${formatDateTimePtBr(w.dateTimeISO)} • ${w.fasting ? 'jejum' : 'sem jejum'}`,
-        id: w.id
-      });
-    }
-
-    timeline.sort(sortByDateTimeDesc);
-
-    clearChildren(timelineList);
-    if (timeline.length === 0) {
-      renderEmptyState(timelineList, 'Nada por aqui ainda', 'Registre uma aplicação ou um peso para começar.');
-    } else {
-      timeline.slice(0, 12).forEach((ev) => {
-        const item = createEl('div', { class: 'item', role: 'listitem' });
-        const main = createEl('div', { class: 'item__main' });
-        main.appendChild(createEl('div', { class: 'item__title' }, ev.title));
-        main.appendChild(createEl('div', { class: 'item__meta' }, ev.meta));
-        item.appendChild(main);
-
-        const actions = createEl('div', { class: 'item__actions' });
-        const goBtn = createEl('button', {
-          class: 'btn btn--secondary',
-          type: 'button',
-          dataset: { action: ev.type === 'inj' ? 'editInjection' : 'editWeight', id: ev.id }
-        }, 'Editar');
-        actions.appendChild(goBtn);
-
-        item.appendChild(actions);
-        timelineList.appendChild(item);
-      });
+      // silencioso: não deve quebrar o dashboard se o canvas não estiver presente
     }
 
     await renderReminderBanner();
@@ -2213,8 +2175,32 @@
   // Render: Configurações (V3)
   // -----------------------------
 
+  async function renderBackupInfo() {
+    if (appVersionEl) appVersionEl.textContent = APP_VERSION;
+    
+    const lastBackup = await getLastAutoBackup();
+    if (lastBackupInfoEl) {
+      if (lastBackup) {
+        const date = formatDateTimePtBr(lastBackup.timestamp);
+        lastBackupInfoEl.innerHTML = `
+          <div><strong>Último backup:</strong> ${date}</div>
+          <div><strong>Versão:</strong> ${lastBackup.appVersion}</div>
+          <div><strong>Motivo:</strong> ${lastBackup.reason === 'update' ? 'Atualização' : lastBackup.reason === 'manual' ? 'Manual' : lastBackup.reason}</div>
+        `;
+        if (btnRestoreLastBackup) {
+          btnRestoreLastBackup.hidden = false;
+          btnRestoreLastBackup.onclick = () => restoreAutoBackup(lastBackup.id);
+        }
+      } else {
+        lastBackupInfoEl.innerHTML = '<div class="muted">Nenhum backup automático encontrado.</div>';
+        if (btnRestoreLastBackup) btnRestoreLastBackup.hidden = true;
+      }
+    }
+  }
+
   async function renderSettingsView() {
     const s = await getSettings();
+    await renderBackupInfo();
 
     if (settingsPatientNameEl) settingsPatientNameEl.value = String(s.patientName || '');
     if (settingsPatientBirthDateEl) settingsPatientBirthDateEl.value = String(s.patientBirthDate || '');
@@ -2705,50 +2691,8 @@
     });
   }
 
-  async function exportReportPdf() {
-    // Primeiro renderiza a prévia localmente
-    await renderReportPreview();
-    showToast('Prévia atualizada. Role para baixo para visualizar.');
-    
-    // Aguarda um momento e depois oferece compartilhamento
-    setTimeout(() => {
-      if (confirm('Deseja abrir o relatório em nova aba para compartilhar/salvar PDF?')) {
-        openReportInNewTab();
-      }
-    }, 800);
-  }
-
-  async function openReportInNewTab() {
-    const settings = await getSettings();
-    const rangeDays = reportRangeEl?.value ? Number(reportRangeEl.value) : (settings.preferredReportRangeDays || DEFAULTS.preferredReportRangeDays);
-    const patientName = reportPatientNameEl?.value || settings.patientName || '';
-    const birth = resolvePatientBirthInfo(settings);
-    const patientBirthLabel = birth.label || '';
-    const patientAgeYears = birth.ageYears;
-
-    const [injections, weights, measures] = await Promise.all([
-      getAll(STORE_INJECTIONS),
-      getAll(STORE_WEIGHTS),
-      getAll(STORE_MEASURES)
-    ]);
-
-    const inner = buildClinicalReportInnerHtml({
-      rangeDays,
-      patientName,
-      patientBirthLabel,
-      patientAgeYears,
-      data: { injections, weights, measures },
-      settings
-    });
-
-    const win = window.open('', '_blank');
-    if (!win) {
-      showToast('Bloqueador de pop-up: permita abrir a aba do relatório.');
-      return;
-    }
-
-    win.document.open();
-    win.document.write(`<!doctype html>
+  function wrapClinicalReportHtml(innerHtml) {
+    return `<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -2793,10 +2737,62 @@
 </head>
 <body>
   <div class="note">Use o menu do navegador/impressão e escolha <strong>Salvar como PDF</strong>.</div>
-  ${inner}
+  ${innerHtml}
   <script>setTimeout(() => { try { window.focus(); window.print(); } catch {} }, 250);<\/script>
 </body>
-</html>`);
+</html>`;
+  }
+
+  async function buildReportHtmlDocument() {
+    const settings = await getSettings();
+    const rangeDays = reportRangeEl?.value ? Number(reportRangeEl.value) : (settings.preferredReportRangeDays || DEFAULTS.preferredReportRangeDays);
+    const patientName = reportPatientNameEl?.value || settings.patientName || '';
+    const birth = resolvePatientBirthInfo(settings);
+    const patientBirthLabel = birth.label || '';
+    const patientAgeYears = birth.ageYears;
+
+    const [injections, weights, measures] = await Promise.all([
+      getAll(STORE_INJECTIONS),
+      getAll(STORE_WEIGHTS),
+      getAll(STORE_MEASURES)
+    ]);
+
+    const inner = buildClinicalReportInnerHtml({
+      rangeDays,
+      patientName,
+      patientBirthLabel,
+      patientAgeYears,
+      data: { injections, weights, measures },
+      settings
+    });
+
+    return wrapClinicalReportHtml(inner);
+  }
+
+  async function exportReportPdf() {
+    const html = await buildReportHtmlDocument();
+    const shared = await shareHtmlFileIfPossible({
+      title: 'Relatório DoseCheck',
+      filename: `dosecheck-relatorio-${todayStamp()}.html`,
+      html,
+      textFallback: 'Use “Salvar como PDF” no navegador.'
+    });
+
+    if (shared) return;
+
+    await openReportInNewTab(html);
+  }
+
+  async function openReportInNewTab(html) {
+    const docHtml = html || await buildReportHtmlDocument();
+    const win = window.open('', '_blank');
+    if (!win) {
+      showToast('Bloqueador de pop-up: permita abrir a aba do relatório.');
+      return;
+    }
+
+    win.document.open();
+    win.document.write(docHtml);
     win.document.close();
   }
 
@@ -3544,17 +3540,23 @@
   async function callAnalyzeEndpoint(payload) {
     // Endpoint esperado: /api/analyze
     // Em servidor estático, isso tende a 404; por isso fazemos fallback.
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-    if (!res.ok) {
-      throw new Error(`API respondeu ${res.status}`);
+      if (!res.ok) {
+        throw new Error(`API respondeu ${res.status}`);
+      }
+
+      return res.json();
+    } catch (err) {
+      // Silencia o erro no console - esperado em modo offline/estático
+      console.debug('API /api/analyze indisponível (esperado em modo offline):', err.message);
+      throw err;
     }
-
-    return res.json();
   }
 
   function mockAnalyze(summary) {
@@ -3678,27 +3680,23 @@
 
   async function runInsights() {
     const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
-    insightsStatus.textContent = `Preparando resumo dos últimos ${d} dias…`;
+    insightsStatus.textContent = `Analisando seus dados dos últimos ${d} dias…`;
     clearChildren(insightsCards);
 
     const built = await buildInsightsSummary(d);
     if (insightsSummaryTextEl) insightsSummaryTextEl.value = built.text;
     renderInsightsSummaryMeta(built);
     const summary = built.summary;
-    const prompt = built.prompt;
 
-    insightsStatus.textContent = 'Chamando /api/analyze (fallback local se indisponível)…';
+    // Análise local baseada 100% nos dados do usuário
+    const localResult = mockAnalyze(summary);
+    insightsStatus.textContent = 'Análise concluída com base nos seus dados.';
+    renderInsightsCards(localResult);
+  }
 
-    try {
-      const apiResult = await callAnalyzeEndpoint({ prompt, summary });
-      insightsStatus.textContent = 'Resposta recebida.';
-      renderInsightsCards(apiResult);
-    } catch {
-      // Mock local
-      const mock = mockAnalyze(summary);
-      insightsStatus.textContent = 'Modo offline/mock: exibindo análise local.';
-      renderInsightsCards(mock);
-    }
+  async function renderInsights() {
+    // Carrega automaticamente ao entrar na aba
+    await runInsights();
   }
 
   function formatTimeHHmmPtBr(dateTimeISO) {
@@ -4040,6 +4038,90 @@
     }
 
     showToast('Backup restaurado.');
+    await refreshAll();
+  }
+
+  async function createAutoBackup(reason = 'manual') {
+    const [injections, weights, measures] = await Promise.all([
+      getAll(STORE_INJECTIONS),
+      getAll(STORE_WEIGHTS),
+      getAll(STORE_MEASURES)
+    ]);
+    const settings = await getSettings();
+
+    const backup = {
+      id: uuid(),
+      timestamp: new Date().toISOString(),
+      appVersion: APP_VERSION,
+      reason,
+      data: {
+        injections,
+        weights,
+        measures,
+        settings
+      }
+    };
+
+    await put(STORE_AUTO_BACKUPS, backup);
+
+    // Manter apenas os 5 backups mais recentes
+    const allBackups = await getAll(STORE_AUTO_BACKUPS);
+    if (allBackups.length > 5) {
+      allBackups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      const toDelete = allBackups.slice(5);
+      for (const old of toDelete) {
+        await del(STORE_AUTO_BACKUPS, old.id);
+      }
+    }
+
+    return backup;
+  }
+
+  async function getLastAutoBackup() {
+    const backups = await getAll(STORE_AUTO_BACKUPS);
+    if (!backups.length) return null;
+    backups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    return backups[0];
+  }
+
+  async function restoreAutoBackup(backupId) {
+    const backup = await getByKey(STORE_AUTO_BACKUPS, backupId);
+    if (!backup) {
+      showToast('Backup não encontrado.');
+      return;
+    }
+
+    const proceed = confirm(`Restaurar backup de ${formatDateTimePtBr(backup.timestamp)}?\nVersão: ${backup.appVersion}\nMotivo: ${backup.reason}\n\nIsto substituirá seus dados atuais.`);
+    if (!proceed) return;
+
+    // Criar backup antes de restaurar
+    await createAutoBackup('pre-restore');
+
+    await Promise.all([
+      clearStore(STORE_INJECTIONS),
+      clearStore(STORE_WEIGHTS),
+      clearStore(STORE_MEASURES)
+    ]);
+
+    const data = backup.data;
+    for (const inj of data.injections) {
+      if (!inj.id) inj.id = uuid();
+      await put(STORE_INJECTIONS, normalizeInjection(inj));
+    }
+    for (const w of data.weights) {
+      if (!w.id) w.id = uuid();
+      await put(STORE_WEIGHTS, normalizeWeight(w));
+    }
+    for (const m of data.measures) {
+      if (!m.id) m.id = uuid();
+      await put(STORE_MEASURES, normalizeMeasures(m));
+    }
+
+    if (data.settings) {
+      await saveSettings(data.settings);
+    }
+
+    showToast('Backup automático restaurado.');
     await refreshAll();
   }
 
@@ -4422,6 +4504,14 @@
         });
         break;
       }
+      case 'shareInsightsSummaryWhatsapp': {
+        const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
+        const built = await buildInsightsSummary(d);
+        const text = built.text;
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+        break;
+      }
       case 'refreshReportPreview':
         await renderReportPreview();
         showToast('Prévia atualizada.');
@@ -4440,6 +4530,11 @@
         break;
       case 'downloadBackup':
         await downloadBackup();
+        break;
+      case 'createManualBackup':
+        await createAutoBackup('manual');
+        showToast('Backup criado com sucesso.');
+        await renderBackupInfo();
         break;
       case 'wipeAll':
         await wipeAll();
@@ -4470,7 +4565,7 @@
     if (route === 'dashboard') await renderDashboard();
     if (route === 'injections') await renderInjections();
     if (route === 'body') await renderBody();
-    // Insights é sob demanda
+    if (route === 'insights') await renderInsights();
     if (route === 'report') {
       if (reportRangeEl && !reportRangeEl.dataset.userTouched) {
         reportRangeEl.value = String(s.preferredReportRangeDays || DEFAULTS.preferredReportRangeDays);
@@ -4522,6 +4617,14 @@
       let userAcceptedUpdate = false;
       let refreshing = false;
 
+      const requestUpdateCheck = () => {
+        try {
+          registration.update();
+        } catch {
+          // ignorar
+        }
+      };
+
       const showUpdateBanner = (mode) => {
         if (!bannerUpdate) return;
         const hasWaiting = Boolean(registration.waiting);
@@ -4555,6 +4658,14 @@
         const mode = bannerUpdate?.dataset?.mode || 'waiting';
         userAcceptedUpdate = true;
         hideUpdateBanner();
+
+        // Criar backup antes de atualizar
+        try {
+          await createAutoBackup('update');
+          showToast('Backup criado. Atualizando...');
+        } catch (err) {
+          console.error('Erro ao criar backup:', err);
+        }
 
         if (mode === 'waiting' && registration.waiting) {
           try {
@@ -4597,6 +4708,11 @@
           showUpdateBanner('reload');
         }
       });
+
+      // Checa atualização ao abrir/ficar online ou em foco.
+      requestUpdateCheck();
+      window.addEventListener('focus', requestUpdateCheck);
+      window.addEventListener('online', requestUpdateCheck);
     } catch {
       // Se falhar, o app ainda funciona online.
     }
@@ -4635,6 +4751,9 @@
 
     insightsRangeEl?.addEventListener('change', () => {
       insightsRangeEl.dataset.userTouched = 'true';
+      if (getRoute() === 'insights') {
+        runInsights().catch(() => {});
+      }
     });
 
     weeklyConsistencyWeekEl?.addEventListener('change', () => {

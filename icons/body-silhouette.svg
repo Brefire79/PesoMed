@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="800" viewBox="0 0 400 800" role="img" aria-label="Silhueta do corpo humano">
+  <defs>
+    <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#7aa7ff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#49c5b6" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+  <!-- Silhueta simples (torso) para orientar Pescoço, Cintura e Quadril -->
+  <g fill="url(#g)" stroke="#eaf2ff" stroke-opacity="0.35" stroke-width="2">
+    <!-- Cabeça -->
+    <circle cx="200" cy="90" r="45" />
+    <!-- Pescoço -->
+    <rect x="175" y="130" width="50" height="35" rx="14" />
+    <!-- Ombros e tórax -->
+    <path d="M80,190 C120,160 160,150 200,150 C240,150 280,160 320,190 L340,240 C330,300 300,360 280,420 C270,450 240,470 200,470 C160,470 130,450 120,420 C100,360 70,300 60,240 Z"/>
+    <!-- Cintura (marcação leve) -->
+    <rect x="120" y="380" width="160" height="16" rx="8" fill="#ffffff" fill-opacity="0.18" stroke="none" />
+    <!-- Quadril -->
+    <path d="M120,480 C110,520 110,560 130,600 C160,660 240,660 270,600 C290,560 290,520 280,480 Z" />
+  </g>
+  <!-- Rótulos auxiliares discretos -->
+  <g font-family="system-ui, Segoe UI, Roboto, Arial" font-size="14" fill="#eaf2ff" fill-opacity="0.55">
+    <text x="200" y="125" text-anchor="middle">Pescoço</text>
+    <text x="200" y="375" text-anchor="middle">Cintura</text>
+    <text x="200" y="520" text-anchor="middle">Quadril</text>
+  </g>
+</svg>
