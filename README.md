@@ -53,13 +53,17 @@ git clone https://github.com/Brefire79/PesoMed.git
 cd PesoMed
 
 # Inicie um servidor web (escolha uma opção)
-# Opção 1: Python
+# Opção 1: Node.js (npm)
+npm i
+npm start  # abre em http://localhost:8001
+
+# Opção 2: Python
 python -m http.server 8000
 
-# Opção 2: Node.js
+# Opção 3: Node.js (npx)
 npx http-server . -p 8000
 
-# Opção 3: Live Server (VS Code)
+# Opção 4: Live Server (VS Code)
 # Clique em "Go Live" na barra inferior
 ```
 
