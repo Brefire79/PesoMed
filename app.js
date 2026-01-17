@@ -1403,9 +1403,12 @@
 
   const nextInjectionValue = document.getElementById('nextInjectionValue');
   const nextInjectionSub = document.getElementById('nextInjectionSub');
+  const nextInjectionStatusChip = document.getElementById('nextInjectionStatus');
 
   const lastWeightValue = document.getElementById('lastWeightValue');
   const lastWeightSub = document.getElementById('lastWeightSub');
+  const lastImcChip = document.getElementById('lastImcChip');
+  const imcChipHelp = document.getElementById('imcChipHelp');
   const delta7 = document.getElementById('delta7');
   const delta14 = document.getElementById('delta14');
   const delta30 = document.getElementById('delta30');
@@ -1528,6 +1531,54 @@
   const mNeckEl = document.getElementById('mNeck');
   const mNotesEl = document.getElementById('mNotes');
 
+  const imcHeightEl = document.getElementById('imcHeight');
+  const imcWeightEl = document.getElementById('imcWeight');
+  const imcResultEl = document.getElementById('imcResult');
+  const imcInterpretationEl = document.getElementById('imcInterpretation');
+
+  // Late Symptoms Dialog
+  const lateSymDialog = document.getElementById('lateSymDialog');
+  const lateSymInjIdEl = document.getElementById('lateSym_injId');
+  const lateSymInjInfoEl = document.getElementById('lateSym_injInfo');
+  
+  const lateSymEls = {
+    nausea: document.getElementById('dlgSym_nausea'),
+    reflux: document.getElementById('dlgSym_reflux'),
+    appetite: document.getElementById('dlgSym_appetite'),
+    energy: document.getElementById('dlgSym_energy'),
+    bowel: document.getElementById('dlgSym_bowel')
+  };
+  const lateSymValEls = {
+    nausea: document.getElementById('dlgSym_nauseaVal'),
+    reflux: document.getElementById('dlgSym_refluxVal'),
+    appetite: document.getElementById('dlgSym_appetiteVal'),
+    energy: document.getElementById('dlgSym_energyVal'),
+    bowel: document.getElementById('dlgSym_bowelVal')
+  };
+  
+  const lateSymNotesEl = document.getElementById('dlgSym_notes');
+  
+  // Inline late symptoms (card)
+  const lateSymptomInjectionEl = document.getElementById('lateSymptomInjection');
+  const lateSymFormEl = document.getElementById('lateSymForm');
+  
+  const inlineLateSym = {
+    nausea: document.getElementById('lateSym_nausea'),
+    reflux: document.getElementById('lateSym_reflux'),
+    appetite: document.getElementById('lateSym_appetite'),
+    energy: document.getElementById('lateSym_energy'),
+    bowel: document.getElementById('lateSym_bowel')
+  };
+  const inlineLateSymVal = {
+    nausea: document.getElementById('lateSym_nauseaVal'),
+    reflux: document.getElementById('lateSym_refluxVal'),
+    appetite: document.getElementById('lateSym_appetiteVal'),
+    energy: document.getElementById('lateSym_energyVal'),
+    bowel: document.getElementById('lateSym_bowelVal')
+  };
+  
+  const inlineLateSymNotesEl = document.getElementById('lateSym_notes');
+
   const restoreFileEl = document.getElementById('restoreFile');
 
   // -----------------------------
@@ -1635,7 +1686,14 @@
 
   function whatsappShareUrl(text) {
     const msg = String(text || '');
-    return `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    // Tenta abrir diretamente no app do WhatsApp (celular) ou web (desktop)
+    if (/Android|iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      // Mobile: usa o scheme nativo do WhatsApp
+      return `whatsapp://send?text=${encodeURIComponent(msg)}`;
+    } else {
+      // Desktop: usa a web do WhatsApp
+      return `https://web.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    }
   }
 
   function pad2(n) {
@@ -2128,11 +2186,13 @@
 
     const settings = await getSettings();
     const nextReminder = computeNextReminderDate(settings);
+    let nextDate = null;
 
     if (injections.length > 0) {
       const last = injections[0];
       const lastDt = new Date(last.dateTimeISO);
       const next = addDays(lastDt, 7);
+      nextDate = next;
       nextText = next.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
       nextSub = `Baseado no último registro (${formatDateTimePtBr(last.dateTimeISO)}).`;
 
@@ -2141,8 +2201,37 @@
         nextSub += ` Lembrete configurado: ${r}.`;
       }
     } else if (nextReminder) {
+      nextDate = nextReminder;
       nextText = nextReminder.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
       nextSub = 'Baseado no seu lembrete semanal.';
+    }
+
+    // Atualiza chip de status de proximidade
+    if (nextInjectionStatusChip) {
+      if (nextDate instanceof Date) {
+        const diffMs = nextDate.getTime() - n.getTime();
+        const diffH = Math.round(diffMs / 3_600_000);
+        let cls = 'chip', txt = '';
+        if (diffH >= 24) {
+          const d = Math.floor(diffH / 24);
+          const h = diffH % 24;
+          txt = `Em ${d}d ${h}h`;
+          cls = 'chip chip--ok';
+        } else if (diffH >= 0) {
+          txt = `Em ${diffH}h`;
+          cls = 'chip chip--warn';
+        } else {
+          const hOver = Math.abs(diffH);
+          txt = `Atrasado ${hOver}h`;
+          cls = 'chip chip--danger';
+        }
+        nextInjectionStatusChip.textContent = `Status: ${txt}`;
+        nextInjectionStatusChip.className = cls;
+        pulseChip(nextInjectionStatusChip);
+      } else {
+        nextInjectionStatusChip.textContent = 'Status: —';
+        nextInjectionStatusChip.className = 'chip';
+      }
     }
 
     if (nextInjectionValue) nextInjectionValue.textContent = nextText;
@@ -2153,9 +2242,34 @@
     if (deltas.last) {
       lastWeightValue.textContent = formatKg(deltas.last.weightKg);
       lastWeightSub.textContent = `Em ${formatDateTimePtBr(deltas.last.dateTimeISO)} (${deltas.last.fasting ? 'jejum' : 'sem jejum'}).`;
+      // IMC atual, se altura estiver configurada
+      const hCm = Number((settings?.imcHeight) ?? 0);
+      if (Number.isFinite(hCm) && hCm > 0) {
+        const h = hCm / 100;
+        const imc = deltas.last.weightKg / (h * h);
+        let cls = '';
+        if (imc < 18.5) cls = 'Abaixo do peso';
+        else if (imc < 25) cls = 'Peso normal';
+        else if (imc < 30) cls = 'Sobrepeso';
+        else cls = 'Obesidade';
+        if (lastImcChip) {
+          lastImcChip.textContent = `IMC: ${imc.toFixed(1).replace('.', ',')} (${cls})`;
+          // classe visual
+          let vClass = 'chip';
+          if (imc < 18.5) vClass = 'chip chip--warn';
+          else if (imc < 25) vClass = 'chip chip--ok';
+          else if (imc < 30) vClass = 'chip chip--warn';
+          else vClass = 'chip chip--danger';
+          lastImcChip.className = vClass;
+          pulseChip(lastImcChip);
+        }
+      } else {
+        if (lastImcChip) { lastImcChip.textContent = 'IMC: —'; lastImcChip.className = 'chip'; }
+      }
     } else {
       lastWeightValue.textContent = '—';
       lastWeightSub.textContent = 'Sem registros ainda.';
+      if (lastImcChip) { lastImcChip.textContent = 'IMC: —'; lastImcChip.className = 'chip'; }
     }
     delta7.textContent = `7d: ${formatDeltaKg(deltas.d7)}`;
     delta14.textContent = `14d: ${formatDeltaKg(deltas.d14)}`;
@@ -2169,6 +2283,17 @@
     }
 
     await renderReminderBanner();
+  }
+
+  function pulseChip(el){
+    try{
+      if (!el) return;
+      el.classList.remove('chip--updated');
+      // Force reflow to restart animation
+      void el.offsetWidth;
+      el.classList.add('chip--updated');
+      setTimeout(() => el.classList.remove('chip--updated'), 700);
+    }catch{}
   }
 
   // -----------------------------
@@ -2369,7 +2494,7 @@
     }
     const means = {};
     for (const k of keys) {
-      means[k] = sums[k] / injections.length;
+      means[k] = injections.length ? Math.round((sums[k] / injections.length) * 10) / 10 : 0;
     }
     return { means, peaks };
   }
@@ -2550,10 +2675,24 @@
           <div class="cr-section-title">Resumo executivo</div>
           <div class="cr-grid">
             <div class="cr-box">
-              <div class="cr-box-title">Peso</div>
+              <div class="cr-box-title">Peso e IMC</div>
               <div><span class="cr-k">Início → fim:</span> <span class="cr-v">${escapeHtml(wStartText)} → ${escapeHtml(wEndText)}</span></div>
               <div><span class="cr-k">Variação:</span> <span class="cr-v">${escapeHtml(wtDelta)}</span></div>
               <div><span class="cr-k">Média semanal:</span> <span class="cr-v">${escapeHtml(perWeek)}</span></div>
+              ${(() => {
+                const imcHeight = settingsResolved?.imcHeight;
+                if (wEnd !== null && imcHeight && imcHeight > 0) {
+                  const heightM = imcHeight / 100;
+                  const imc = wEnd / (heightM * heightM);
+                  let classification = '';
+                  if (imc < 18.5) classification = 'Abaixo do peso';
+                  else if (imc < 25) classification = 'Peso normal';
+                  else if (imc < 30) classification = 'Sobrepeso';
+                  else classification = 'Obesidade';
+                  return `<div><span class="cr-k">IMC atual:</span> <span class="cr-v">${imc.toFixed(1).replace('.', ',')} (${escapeHtml(classification)})</span></div>`;
+                }
+                return '';
+              })()}
             </div>
             <div class="cr-box">
               <div class="cr-box-title">Consistência (agenda)</div>
@@ -2850,6 +2989,23 @@
     lines.push(`Peso início → fim: ${summary.weight.startKg === null ? '—' : summary.weight.startKg.toFixed(1).replace('.', ',')} → ${summary.weight.endKg === null ? '—' : summary.weight.endKg.toFixed(1).replace('.', ',')} kg`);
     lines.push(`Delta: ${Number.isFinite(summary.weight.deltaKg) ? `${summary.weight.deltaKg >= 0 ? '+' : ''}${summary.weight.deltaKg.toFixed(1).replace('.', ',')} kg` : '—'}`);
     lines.push(`Tendência: ${Number.isFinite(summary.weight.perWeekKg) ? `${summary.weight.perWeekKg >= 0 ? '+' : ''}${summary.weight.perWeekKg.toFixed(2).replace('.', ',')} kg/sem` : '—'}`);
+    
+    // IMC (calculado a partir do último peso e altura configurada, se disponível)
+    const lastWeight = summary?.last?.weight?.weightKg;
+    if (lastWeight && Number.isFinite(lastWeight)) {
+      const imcHeight = settings?.imcHeight; // altura já disponível nas configurações
+      if (imcHeight && imcHeight > 0) {
+        const heightM = imcHeight / 100;
+        const imc = lastWeight / (heightM * heightM);
+        let classification = '';
+        if (imc < 18.5) classification = 'Abaixo do peso';
+        else if (imc < 25) classification = 'Peso normal';
+        else if (imc < 30) classification = 'Sobrepeso';
+        else classification = 'Obesidade';
+        lines.push(`IMC atual: ${imc.toFixed(1).replace('.', ',')} (${classification}) — altura ${imcHeight.toFixed(0)} cm`);
+      }
+    }
+    
     lines.push('');
     lines.push(`Medidas: ${summary.measures.count}`);
     if (summary.measures.deltaByField) {
@@ -3158,6 +3314,11 @@
         dataset: { action: 'editInjection', id: inj.id }
       }, 'Editar'));
       actions.appendChild(createEl('button', {
+        class: 'btn btn--secondary',
+        type: 'button',
+        dataset: { action: 'openLateSymptomsDialog', id: inj.id }
+      }, '+ Sintomas'));
+      actions.appendChild(createEl('button', {
         class: 'btn btn--danger',
         type: 'button',
         dataset: { action: 'deleteInjection', id: inj.id }
@@ -3166,6 +3327,9 @@
       item.appendChild(actions);
       injectionList.appendChild(item);
     }
+
+    // Atualizar opções do seletor de aplicações para sintomas tardios
+    await renderLateSymptomInjectionOptions();
   }
 
   // -----------------------------
@@ -4151,7 +4315,7 @@
     const settings = await getSettings();
     const allowArmOptions = Boolean(settings.enableArmSites) || Boolean(existing?.site?.startsWith('arm_'));
     applyArmSitesVisibility(allowArmOptions);
-    const suggestedSite = getNextInjectionSite(injections, settings);
+    const suggestedSite = await getNextInjectionSite(injections, settings);
 
     // Título
     const title = document.getElementById('injTitle');
@@ -4225,6 +4389,103 @@
     closeDialog(injDialog);
     clearInjectionForm();
     await refreshAll();
+  }
+
+  // Late Symptoms (após aplicação)
+  async function openLateSymptomsDialog(injectionId) {
+    const all = await getAll(STORE_INJECTIONS);
+    const inj = all.find((x) => x.id === injectionId);
+    if (!inj) {
+      showToast('Aplicação não encontrada.');
+      return;
+    }
+
+    lateSymInjIdEl.value = injectionId;
+    const infoText = `${formatDateTimePtBr(inj.dateTimeISO)} • ${inj.medName || '—'} • ${formatDoseMg(inj.doseMg)} • ${siteLabel(inj.site)}`;
+    lateSymInjInfoEl.textContent = infoText;
+
+    // Carregar sintomas atuais se existirem
+    const symptoms = inj.symptoms || {};
+    for (const k of Object.keys(lateSymEls)) {
+      if (lateSymEls[k]) {
+        lateSymEls[k].value = String(symptoms[k] ?? 0);
+        if (lateSymValEls[k]) lateSymValEls[k].textContent = String(symptoms[k] ?? 0);
+      }
+    }
+    
+    if (lateSymNotesEl) {
+      lateSymNotesEl.value = inj.notes || '';
+    }
+
+    lateSymDialog.showModal();
+  }
+
+  function clearLateSymptomsDialog() {
+    lateSymInjIdEl.value = '';
+    lateSymInjInfoEl.textContent = '—';
+    for (const k of Object.keys(lateSymEls)) {
+      if (lateSymEls[k]) {
+        lateSymEls[k].value = '0';
+        if (lateSymValEls[k]) lateSymValEls[k].textContent = '0';
+      }
+    }
+    if (lateSymNotesEl) lateSymNotesEl.value = '';
+  }
+
+  async function saveLateSymptomsFromDialog() {
+    const injectionId = lateSymInjIdEl.value;
+    if (!injectionId) {
+      showToast('Nenhuma aplicação selecionada.');
+      return;
+    }
+
+    const all = await getAll(STORE_INJECTIONS);
+    const inj = all.find((x) => x.id === injectionId);
+    if (!inj) {
+      showToast('Aplicação não encontrada.');
+      return;
+    }
+
+    // Atualizar apenas os sintomas
+    inj.symptoms = {
+      nausea: Number(lateSymEls.nausea.value || 0),
+      reflux: Number(lateSymEls.reflux.value || 0),
+      appetite: Number(lateSymEls.appetite.value || 0),
+      energy: Number(lateSymEls.energy.value || 0),
+      bowel: Number(lateSymEls.bowel.value || 0)
+    };
+    
+    // Manter observações anteriores e adicionar as novas se houver
+    const newNotes = lateSymNotesEl.value.trim();
+    if (newNotes) {
+      inj.notes = (inj.notes ? inj.notes + ' | ' : '') + `[Sintomas tardios] ${newNotes}`;
+    }
+
+    await put(STORE_INJECTIONS, inj);
+    showToast('Sintomas tardios registrados.');
+
+    closeDialog(lateSymDialog);
+    clearLateSymptomsDialog();
+    await refreshAll();
+  }
+
+  // Render late symptoms selector (inline na aba Aplicações)
+  async function renderLateSymptomInjectionOptions() {
+    if (!lateSymptomInjectionEl) return;
+
+    const all = await getAll(STORE_INJECTIONS);
+    all.sort(sortByDateTimeDesc);
+    
+    // Mostrar últimas 14 aplicações
+    const recent = all.slice(0, 14);
+
+    lateSymptomInjectionEl.innerHTML = '<option value="">Selecione uma aplicação...</option>';
+    for (const inj of recent) {
+      const opt = document.createElement('option');
+      opt.value = inj.id;
+      opt.textContent = `${formatDateTimePtBr(inj.dateTimeISO)} • ${inj.medName || '—'} • ${formatDoseMg(inj.doseMg)}`;
+      lateSymptomInjectionEl.appendChild(opt);
+    }
   }
 
   async function openWeightForm(existing = null) {
@@ -4357,6 +4618,9 @@
       case 'closeInjDialog':
         closeDialog(injDialog);
         break;
+      case 'closeLateSymDialog':
+        closeDialog(lateSymDialog);
+        break;
       case 'closeWDialog':
         closeDialog(wDialog);
         break;
@@ -4375,6 +4639,82 @@
         clearMeasuresForm();
         showToast('Formulário limpo.');
         break;
+      case 'openLateSymptomsDialog': {
+        if (!id) {
+          showToast('Selecione uma aplicação.');
+          break;
+        }
+        await openLateSymptomsDialog(id);
+        break;
+      }
+      case 'saveLateSymptoms': {
+        await saveLateSymptomsFromDialog();
+        break;
+      }
+      case 'clearLateSymptoms': {
+        inlineLateSymNotesEl.value = '';
+        for (const k of Object.keys(inlineLateSym)) {
+          if (inlineLateSym[k]) {
+            inlineLateSym[k].value = '0';
+            if (inlineLateSymVal[k]) inlineLateSymVal[k].textContent = '0';
+          }
+        }
+        showToast('Formulário limpo.');
+        break;
+      }
+      case 'calculateIMC': {
+        const heightInput = imcHeightEl?.value || '';
+        const weightInput = imcWeightEl?.value || '';
+        
+        const heightCm = parseNumberPtBr(heightInput); // altura em cm
+        const height = heightCm / 100; // converter cm para m
+        const weight = parseNumberPtBr(weightInput);
+        
+        if (!Number.isFinite(height) || !Number.isFinite(weight) || height <= 0 || weight <= 0) {
+          showToast('Insira valores válidos para altura e peso.');
+          break;
+        }
+        
+        // Salvar altura nas configurações para uso no relatório e insights
+        const currentSettings = await getSettings();
+        currentSettings.imcHeight = heightCm;
+        await saveSettings(currentSettings);
+        
+        const imc = weight / (height * height);
+        const imcFormatted = imc.toFixed(1);
+        
+        let classification = '';
+        let color = 'banner--info';
+        
+        if (imc < 18.5) {
+          classification = 'Abaixo do peso';
+          color = 'banner--info';
+        } else if (imc < 25) {
+          classification = 'Peso normal';
+          color = 'banner--info';
+        } else if (imc < 30) {
+          classification = 'Sobrepeso';
+          color = 'banner--warning';
+        } else {
+          classification = 'Obesidade';
+          color = 'banner--danger';
+        }
+        
+        if (imcResultEl) {
+          imcResultEl.className = `banner ${color}`;
+          imcResultEl.textContent = `IMC: ${imcFormatted} (${classification})`;
+          imcResultEl.hidden = false;
+        }
+        
+        const interpretation = `IMC: ${imcFormatted}\nClassificação: ${classification}\n\nAltura: ${(height * 100).toFixed(1)} cm\nPeso: ${weight.toFixed(2)} kg\n\nFaixas de referência:\n- Abaixo do peso: IMC < 18,5\n- Peso normal: 18,5 ≤ IMC < 25\n- Sobrepeso: 25 ≤ IMC < 30\n- Obesidade: IMC ≥ 30`;
+        
+        if (imcInterpretationEl) {
+          imcInterpretationEl.value = interpretation;
+        }
+        
+        showToast('IMC calculado com sucesso.');
+        break;
+      }
       case 'editInjection': {
         const all = await getAll(STORE_INJECTIONS);
         const found = all.find((x) => x.id === id);
@@ -4508,7 +4848,7 @@
         const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
         const built = await buildInsightsSummary(d);
         const text = built.text;
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        const url = whatsappShareUrl(text);
         window.open(url, '_blank');
         break;
       }
@@ -4796,6 +5136,26 @@
       showChartTooltip(p);
     }, { passive: true });
 
+    // Tooltip/ajuda do chip de IMC (popover com auto-close)
+    let imcHelpTimer = null;
+    lastImcChip?.addEventListener('click', () => {
+      if (!imcChipHelp) return;
+      const nowOpen = imcChipHelp.hidden;
+      imcChipHelp.hidden = !nowOpen;
+      if (!imcChipHelp.hidden) {
+        if (imcHelpTimer) clearTimeout(imcHelpTimer);
+        imcHelpTimer = setTimeout(() => { try { imcChipHelp.hidden = true; } catch {} }, 5000);
+      }
+    });
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!imcChipHelp || imcChipHelp.hidden) return;
+      if (t === lastImcChip || t === imcChipHelp) return;
+      // close when clicking outside
+      imcChipHelp.hidden = true;
+      if (imcHelpTimer) { clearTimeout(imcHelpTimer); imcHelpTimer = null; }
+    });
+
     let chartResizeRaf = null;
     window.addEventListener('resize', () => {
       if (getRoute() !== 'dashboard') return;
@@ -4839,6 +5199,45 @@
       });
     }
 
+    // Late Symptoms Range values (dialog)
+    for (const k of Object.keys(lateSymEls)) {
+      lateSymEls[k]?.addEventListener('input', () => {
+        lateSymValEls[k].textContent = String(lateSymEls[k].value);
+      });
+    }
+
+    // Late Symptoms Range values (inline)
+    for (const k of Object.keys(inlineLateSym)) {
+      inlineLateSym[k]?.addEventListener('input', () => {
+        if (inlineLateSymVal[k]) inlineLateSymVal[k].textContent = String(inlineLateSym[k].value);
+      });
+    }
+
+    // Late Symptoms Injection selector (populate form when selected)
+    lateSymptomInjectionEl?.addEventListener('change', async () => {
+      const injId = lateSymptomInjectionEl.value;
+      if (injId) {
+        // Show form and load symptoms
+        lateSymFormEl.style.display = 'block';
+        const all = await getAll(STORE_INJECTIONS);
+        const inj = all.find((x) => x.id === injId);
+        if (inj) {
+          const symptoms = inj.symptoms || {};
+          for (const k of Object.keys(inlineLateSym)) {
+            if (inlineLateSym[k]) {
+              inlineLateSym[k].value = String(symptoms[k] ?? 0);
+              if (inlineLateSymVal[k]) inlineLateSymVal[k].textContent = String(symptoms[k] ?? 0);
+            }
+          }
+          if (inlineLateSymNotesEl) {
+            inlineLateSymNotesEl.value = inj.notes || '';
+          }
+        }
+      } else {
+        lateSymFormEl.style.display = 'none';
+      }
+    });
+
     // Forms
     injForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -4864,6 +5263,17 @@
         await saveMeasuresFromForm();
       } catch (err) {
         showToast(String(err?.message || err || 'Erro ao salvar.'));
+      }
+    });
+
+    // Late Symptoms Dialog Form
+    const lateSymFormElement = document.getElementById('lateSymFormDlg');
+    lateSymFormElement?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await saveLateSymptomsFromDialog();
+      } catch (err) {
+        showToast(String(err?.message || err || 'Erro ao salvar sintomas.'));
       }
     });
 

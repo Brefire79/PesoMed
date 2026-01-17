@@ -8,7 +8,7 @@
 */
 
 // Cache com nome estável: facilita atualizar sem precisar “reinstalar” o atalho.
-const CACHE_NAME = 'dosecheck-cache-v3';
+const CACHE_NAME = 'dosecheck-cache-v10';
 
 // Atualize a lista se adicionar novos arquivos estáticos.
 const APP_SHELL = [

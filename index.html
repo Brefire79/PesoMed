@@ -54,12 +54,12 @@
     </section>
 
     <nav class="tabs" aria-label="Navegação principal">
-      <a class="tab" href="#/dashboard" id="tabDashboard">Dashboard</a>
-      <a class="tab" href="#/injections" id="tabInjections">Aplicações</a>
-      <a class="tab" href="#/body" id="tabBody">Peso & Medidas</a>
-      <a class="tab" href="#/insights" id="tabInsights">Insights IA</a>
-      <a class="tab" href="#/report" id="tabReport">Relatório</a>
-      <a class="tab" href="#/settings" id="tabSettings">Config</a>
+      <a class="tab" href="#/dashboard" id="tabDashboard">📊 Dashboard</a>
+      <a class="tab" href="#/injections" id="tabInjections">💉 Aplicações</a>
+      <a class="tab" href="#/body" id="tabBody">⚖️ Peso & Medidas</a>
+      <a class="tab" href="#/insights" id="tabInsights">🤖 Insights IA</a>
+      <a class="tab" href="#/report" id="tabReport">📋 Relatório</a>
+      <a class="tab" href="#/settings" id="tabSettings">⚙️ Config</a>
     </nav>
 
     <section id="viewDashboard" class="view" aria-labelledby="hDashboard">
@@ -72,6 +72,9 @@
             <div class="stat__value" id="nextInjectionValue">—</div>
             <div class="stat__sub" id="nextInjectionSub">Configure seu lembrete ou registre uma aplicação.</div>
           </div>
+          <div class="row" style="margin-top:6px;">
+            <span class="chip" id="nextInjectionStatus">Status: —</span>
+          </div>
           <div class="row">
             <button class="btn" id="btnQuickAddInjectionDashboard" type="button" data-action="quickAddInjection">+ Aplicar agora</button>
           </div>
@@ -83,6 +86,10 @@
             <div class="stat__value" id="lastWeightValue">—</div>
             <div class="stat__sub" id="lastWeightSub">Sem registros ainda.</div>
           </div>
+          <div class="row" style="margin-top:6px;">
+            <span class="chip" id="lastImcChip">IMC: —</span>
+          </div>
+          <div id="imcChipHelp" class="hint hint--popover" hidden>Faixas de referência: Abaixo de 18,5 (abaixo do peso) • 18,5–24,9 (normal) • 25–29,9 (sobrepeso) • 30+ (obesidade).</div>
           <div class="pillset" aria-label="Variações">
             <span class="pill" id="delta7">7d: —</span>
             <span class="pill" id="delta14">14d: —</span>
@@ -93,10 +100,8 @@
             <button class="btn btn--secondary" id="btnQuickAddMeasuresDashboard" type="button" data-action="quickAddMeasures">+ Medir</button>
           </div>
         </article>
-      </div>
-    </section>
 
-    <section id="viewInjections" class="view" aria-labelledby="hInjections" hidden>
+        <article class="card" aria-label="Checklist de hoje" hidden>
           <div class="card__head">
             <h2 class="card__title">Checklist de hoje</h2>
             <span id="checklistTodayBadge" class="chip" aria-live="polite">—</span>
@@ -110,7 +115,7 @@
           </div>
         </article>
 
-        <article class="card" aria-label="Consistência e streak">
+        <article class="card" aria-label="Consistência e streak" hidden>
           <div class="card__head">
             <h2 class="card__title">Consistência da semana</h2>
             <span id="weeklyConsistencyBadge" class="chip" aria-live="polite">—</span>
@@ -150,7 +155,7 @@
           </div>
         </article>
 
-        <article class="card" aria-label="Resumo semanal">
+        <article class="card" aria-label="Resumo semanal" hidden>
           <div class="card__head">
             <h2 class="card__title">Resumo semanal</h2>
           </div>
@@ -165,7 +170,7 @@
           <div class="row">
             <button class="btn btn--summary" type="button" data-action="generateWeeklySummary">Gerar resumo</button>
           </div>
-          <textarea id="weeklySummaryText" class="input" rows="10" readonly placeholder="Toque em “Gerar resumo” acima."></textarea>
+          <textarea id="weeklySummaryText" class="input" rows="10" readonly placeholder="Toque em "Gerar resumo" acima."></textarea>
           <div class="row">
             <button class="btn" type="button" data-action="copyWeeklySummary">Copiar</button>
             <button class="btn btn--secondary" type="button" data-action="shareWeeklySummary">Enviar</button>
@@ -173,7 +178,7 @@
           </div>
         </article>
 
-        <article class="card" aria-label="Insights automáticos">
+        <article class="card" aria-label="Insights automáticos" hidden>
           <h2 class="card__title">Insights da semana</h2>
           <p class="muted">Dicas automáticas com base nos seus registros.</p>
           <div id="localInsightsList" class="list" role="list"></div>
@@ -199,16 +204,71 @@
         <button class="btn" id="btnOpenInjectionForm" type="button" data-action="openInjectionForm">+ Nova</button>
       </div>
 
-      <div class="card">
-        <div class="field">
-          <label class="label" for="injFilter">Filtro</label>
-          <select id="injFilter" class="input">
-            <option value="30">Últimos 30 dias</option>
-            <option value="90">Últimos 90 dias</option>
-            <option value="all">Tudo</option>
-          </select>
-        </div>
-        <div id="injectionList" class="list" role="list"></div>
+      <div class="grid grid--2">
+        <article class="card">
+          <div class="field">
+            <label class="label" for="injFilter">Filtro</label>
+            <select id="injFilter" class="input">
+              <option value="30">Ultimos 30 dias</option>
+              <option value="90">Ultimos 90 dias</option>
+              <option value="all">Tudo</option>
+            </select>
+          </div>
+          <div id="injectionList" class="list" role="list"></div>
+        </article>
+
+        <article class="card" aria-label="Registrar sintomas tardios">
+          <div class="card__head">
+            <h2 class="card__title">Sintomas Tardios</h2>
+          </div>
+          <p class="muted">Registre sintomas 24-48h após a aplicação. Selecione uma aplicação para adicionar/editar sintomas.</p>
+          <div class="field">
+            <label class="label" for="lateSymptomInjection">Aplicação (para adicionar sintomas)</label>
+            <select id="lateSymptomInjection" class="input" aria-label="Selecionar aplicação">
+              <option value="">Selecione uma aplicação...</option>
+            </select>
+          </div>
+          <div id="lateSymptomForm" style="display: none;">
+            <fieldset class="fieldset">
+              <legend>Sintomas (0 a 10)</legend>
+              <div class="grid grid--2">
+                <div class="field">
+                  <label class="label" for="lateSym_nausea">Enjoo</label>
+                  <input id="lateSym_nausea" class="input" type="range" min="0" max="10" value="0" />
+                  <div class="rangeValue" id="lateSym_nauseaVal">0</div>
+                </div>
+                <div class="field">
+                  <label class="label" for="lateSym_reflux">Azia</label>
+                  <input id="lateSym_reflux" class="input" type="range" min="0" max="10" value="0" />
+                  <div class="rangeValue" id="lateSym_refluxVal">0</div>
+                </div>
+                <div class="field">
+                  <label class="label" for="lateSym_appetite">Apetite</label>
+                  <input id="lateSym_appetite" class="input" type="range" min="0" max="10" value="0" />
+                  <div class="rangeValue" id="lateSym_appetiteVal">0</div>
+                </div>
+                <div class="field">
+                  <label class="label" for="lateSym_energy">Energia</label>
+                  <input id="lateSym_energy" class="input" type="range" min="0" max="10" value="0" />
+                  <div class="rangeValue" id="lateSym_energyVal">0</div>
+                </div>
+                <div class="field">
+                  <label class="label" for="lateSym_bowel">Intestino</label>
+                  <input id="lateSym_bowel" class="input" type="range" min="0" max="10" value="0" />
+                  <div class="rangeValue" id="lateSym_bowelVal">0</div>
+                </div>
+              </div>
+            </fieldset>
+            <div class="field">
+              <label class="label" for="lateSym_notes">Observação</label>
+              <textarea id="lateSym_notes" class="input" rows="2" placeholder="Ex.: dormiu bem, fez exercício, etc."></textarea>
+            </div>
+            <div class="row">
+              <button class="btn" type="button" data-action="saveLateSymptoms">Salvar sintomas</button>
+              <button class="btn btn--secondary" type="button" data-action="clearLateSymptoms">Limpar</button>
+            </div>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -234,6 +294,39 @@
           <div id="measuresCompare" class="compare" aria-live="polite"></div>
           <div id="measuresList" class="list" role="list"></div>
         </article>
+
+        <article class="card" aria-label="Cálculo de IMC">
+          <div class="card__head">
+            <h2 class="card__title">Índice de Massa Corporal (IMC)</h2>
+          </div>
+          <p class="muted">Insira altura e peso para calcular seu IMC e auxiliar na avaliação de dados.</p>
+          
+          <div class="grid grid--2">
+            <div class="field">
+              <label class="label" for="imcHeight">Altura (cm)</label>
+              <input id="imcHeight" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 175" />
+              <div class="hint">Sua altura em centímetros.</div>
+            </div>
+            <div class="field">
+              <label class="label" for="imcWeight">Peso (kg)</label>
+              <input id="imcWeight" class="input" type="text" inputmode="decimal" pattern="^[0-9]+([\.,][0-9]+)?$" placeholder="Ex.: 82,5" />
+              <div class="hint">Seu peso atual em quilogramas.</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <button class="btn" type="button" data-action="calculateIMC">Calcular IMC</button>
+          </div>
+
+          <div id="imcResult" class="banner banner--info" hidden aria-live="polite"></div>
+
+          <div class="field">
+            <label class="label" for="imcInterpretation">Interpretação</label>
+            <textarea id="imcInterpretation" class="input" rows="4" readonly placeholder="O resultado do IMC aparecerá aqui com a classificação."></textarea>
+          </div>
+
+          <p class="muted" style="margin-top: 12px;">Dados salvos automaticamente para referência na avaliação de IA.</p>
+        </article>
       </div>
     </section>
 
@@ -255,7 +348,6 @@
             <option value="180">180 dias</option>
           </select>
         </div>
-        
         
         <div id="insightsStatus" class="status" aria-live="polite"></div>
         <div id="insightsSummaryMeta" class="banner banner--info" hidden aria-live="polite"></div>
@@ -289,15 +381,13 @@
             </select>
           </div>
           <div class="field">
-            <label class="label" for="reportPatientName">Paciente (informativo)</label>
-            <input id="reportPatientName" class="input" type="text" placeholder="Nome (opcional)" />
+            <label class="label" for="reportPatientName">Paciente</label>
+            <input id="reportPatientName" class="input" type="text" placeholder="Nome" />
           </div>
         </div>
 
         <div class="row">
-          <button class="btn" type="button" data-action="refreshReportPreview">Visualizar relatório</button>
           <button class="btn btn--secondary" type="button" data-action="exportReportPdf">Compartilhar/PDF</button>
-          <button class="btn btn--secondary" type="button" data-action="exportClinicalCsv">Exportar CSV</button>
         </div>
 
         <p class="muted">Visualize primeiro abaixo, depois compartilhe por WhatsApp/email ou salve como PDF.</p>
@@ -312,7 +402,7 @@
 
       <div class="grid grid--2">
         <article class="card" aria-label="Dados do paciente">
-          <h2 class="card__title">Paciente (opcional)</h2>
+          <h2 class="card__title">Paciente</h2>
           <div class="field">
             <label class="label" for="settingsPatientName">Nome</label>
             <input id="settingsPatientName" class="input" type="text" placeholder="Ex.: Breno" />
@@ -320,12 +410,9 @@
           <div class="field">
             <label class="label" for="settingsPatientBirthDate">Data de nascimento</label>
             <input id="settingsPatientBirthDate" class="input" type="date" />
-            <div class="hint">Usado para mostrar idade nos resumos/relatórios (pode deixar em branco).</div>
           </div>
           <div class="field">
-            <label class="label" for="settingsPatientBirthYear">Ano de nascimento (opcional)</label>
-            <input id="settingsPatientBirthYear" class="input" type="number" min="1900" max="2100" step="1" inputmode="numeric" placeholder="Ex.: 1995" />
-            <div class="hint">Compatibilidade: se você preencher a data, o app usa ela como referência.</div>
+            <!-- Campo 'Ano de nascimento' removido por solicitação -->
           </div>
           <div class="field">
             <label class="label" for="settingsPreferredReportRange">Período padrão do relatório</label>
@@ -500,6 +587,68 @@
             <button class="btn btn--danger" type="button" data-action="wipeAll">Apagar tudo</button>
           </div>
         </section>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog: Late Symptoms Form -->
+  <dialog id="lateSymDialog" class="dialog" aria-labelledby="lateSymTitle">
+    <form class="dialog__content" id="lateSymFormDlg">
+      <div class="dialog__head">
+        <h2 id="lateSymTitle">Registrar Sintomas Tardios</h2>
+        <button class="btn btn--ghost" type="button" data-action="closeLateSymDialog" aria-label="Fechar">Fechar</button>
+      </div>
+
+      <div class="dialog__body">
+        <input type="hidden" id="lateSym_injId" />
+
+        <div class="field">
+          <label class="label">Aplicação</label>
+          <div class="stat">
+            <div class="stat__value" id="lateSym_injInfo" style="font-size: 14px;">—</div>
+          </div>
+        </div>
+
+        <fieldset class="fieldset">
+          <legend>Sintomas (0 a 10) - registre 24-48h após a aplicação</legend>
+          <div class="grid grid--2">
+            <div class="field">
+              <label class="label" for="dlgSym_nausea">Enjoo</label>
+              <input id="dlgSym_nausea" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="dlgSym_nauseaVal">0</div>
+            </div>
+            <div class="field">
+              <label class="label" for="dlgSym_reflux">Azia</label>
+              <input id="dlgSym_reflux" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="dlgSym_refluxVal">0</div>
+            </div>
+            <div class="field">
+              <label class="label" for="dlgSym_appetite">Apetite</label>
+              <input id="dlgSym_appetite" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="dlgSym_appetiteVal">0</div>
+            </div>
+            <div class="field">
+              <label class="label" for="dlgSym_energy">Energia</label>
+              <input id="dlgSym_energy" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="dlgSym_energyVal">0</div>
+            </div>
+            <div class="field">
+              <label class="label" for="dlgSym_bowel">Intestino</label>
+              <input id="dlgSym_bowel" class="input" type="range" min="0" max="10" value="0" />
+              <div class="rangeValue" id="dlgSym_bowelVal">0</div>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label class="label" for="dlgSym_notes">Observação</label>
+          <textarea id="dlgSym_notes" class="input" rows="2" placeholder="Ex.: dormiu bem, fez exercício, estava ansiosa, etc."></textarea>
+        </div>
+
+        <div class="row">
+          <button class="btn" type="submit">Salvar sintomas</button>
+          <button class="btn btn--secondary" type="button" data-action="clearLateSymDialog">Limpar</button>
+        </div>
       </div>
     </form>
   </dialog>
