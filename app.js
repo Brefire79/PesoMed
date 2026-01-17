@@ -19,7 +19,7 @@
   // -----------------------------
 
   // Versão do app
-  const APP_VERSION = '1.5.1';
+  const APP_VERSION = '1.5.2';
 
   // Mantido como 'pesomed-db' para preservar dados existentes após o rename.
   const DB_NAME = 'pesomed-db';
