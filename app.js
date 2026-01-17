@@ -4848,8 +4848,20 @@
         const d = insightsRangeEl?.value ? Math.max(1, Math.floor(Number(insightsRangeEl.value) || 30)) : 30;
         const built = await buildInsightsSummary(d);
         const text = built.text;
+        const title = `Resumo DoseCheck (${built.days} dias)`;
+        if (typeof navigator.share === 'function') {
+          try {
+            await navigator.share({ title, text });
+            break;
+          } catch {
+            // cancelado; segue para fallback
+          }
+        }
+        // Fallback: abre WhatsApp e garante texto no clipboard
+        await copyTextToClipboard(text);
         const url = whatsappShareUrl(text);
-        window.open(url, '_blank');
+        try { window.open(url, '_blank'); } catch {}
+        showToast('Resumo copiado. Abra o WhatsApp e cole, se necessário.');
         break;
       }
       case 'refreshReportPreview':
